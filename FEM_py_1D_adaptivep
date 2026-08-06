@@ -382,6 +382,8 @@ dwr, errors, low_order_plotting, meshed,errorstore, solutionstore  = refinement(
 
 # analytic solution is sin(x), so we should see that here.
 #print(f'solutions: {solutionstore}')
+
+plt.figure(10,6)
 plt.plot(np.linspace(0,5,len(low_order_plotting)),low_order_plotting)
 plt.title('p-adapted Solution')
 plt.ylabel('Solution')
