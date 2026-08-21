@@ -1,0 +1,13 @@
+{
+    "files.exclude": {
+        "**/.git": true,
+        "**/.svn": true,
+        "**/.hg": true,
+        "**/.DS_Store": true,
+        "**/Thumbs.db": true,
+        "**/c:\\Users\\C838447380\\Documents\\EMLabWorkNotes.aux": true,
+        "**/c:\\Users\\C838447380\\Documents\\EMLabWorkNotes.log": true,
+        "**/c:\\Users\\C838447380\\Documents\\EMLabWorkNotes.gz": true,
+        "**/c:\\Users\\C838447380\\Documents\\EMLabWorkNotes.out": true
+    }
+}
