@@ -69,6 +69,40 @@ class mesh:
         for j in range(1,len(nodes)):
             elems.append(element(j-1, [node_set[j-1],node_set[j]], p_order = self.p, level=self.layer, parent=None))
         return node_set, elems
+
+class refiner:
+    def __init__(self, mesh, marked_elem_h, marked_elem_p):
+        self.mesh = mesh
+        self.marked_elem_h = marked_elem_h
+        self.marked_elem_p = marked_elem_p
+
+    def refine_h(self):
+        elements, nodes = self.mesh
+        level_new = self.mesh.layer +1
+        for i in self.marked_elem_h:
+            parent = self.mesh.elems[i]
+            newpos = self.mesh.nodeset[i+1] - self.mesh.nodeset[i-1] / 2
+            new_id = self.mesh.nodeset[-1].id
+            child1_id = self.mesh.elems[-1].id + 1
+            child2_id = self.mesh.elems[-1].id + 2
+            new_node= node(new_id, newpos,level = level_new)
+            self.mesh.nodeset.append(new_node)
+            child1 = element(child1_id, [self.mesh.nodeset[i-1], new_node], p_order = parent.p_order, parent=parent, level=level_new)
+            child2 = element(child2_id,[new_node,self.mesh.nodeset[i+1]],  p_order = parent.p_order,level=level_new,parent=parent)
+            self.mesh.elems.append(child1)
+            self.mesh.elems.append(child2)
+            parent.children.append([self.mesh.elems[-2],self.mesh.elems[-1]])
+            return self.mesh
+
+    def refine_p(self):
+        
+        for i in self.marked_elem_p:
+            self.mesh.elems[i].p_order +=1
+            return self.mesh
+
+
+
+
             
 mesh1 = mesh(10,20, 2)
 nodes, elems = mesh1.gen_init_mesh()
@@ -76,10 +110,11 @@ nodes, elems = mesh1.gen_init_mesh()
 
 
 
+# next need way to assing dofs on each element according the p order of the element,  refining p is easy now - simply p+=1!
 
 
-
-
+def h_refine(marked, mesh):
+    elements = mesh.elems
 
 
 
