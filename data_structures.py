@@ -39,7 +39,7 @@ class edge(topology):
 
 class element(topology):
     def __init__(self, id,nodes,p_order, level, parent):
-        super().__init__(id, level, parent)
+        super().__init__(id=id, active=True, level=level, parent=parent)
         self.p_order = p_order
         self.nodes = nodes
 
@@ -60,7 +60,8 @@ class mesh:
         self.layer = layer
         self.node_set = []
         self.elems = []
-
+        #self.active_elems = []
+       
         
 
     def gen_init_mesh(self):
@@ -73,6 +74,13 @@ class mesh:
         for j in range(1,len(nodes)):
             self.elems.append(element(j-1, [self.node_set[j-1], self.node_set[j]], p_order = self.p, level=self.layer, parent=None))
         return self.node_set, self.elems
+    @property
+    def active_elements(self):
+        return [e for e in self.elems if e.active]
+
+    @property
+    def active_nodes(self):
+        return [n for n in self.node_set if n.active]
 
     
 
@@ -83,18 +91,26 @@ class refiner:
         self.marked_elem_p = marked_elem_p
 
     def refine_h(self):
-        elements, nodes = self.mesh
+        #elements, nodes = self.mesh
         level_new = self.mesh.layer +1
         for i in self.marked_elem_h:
             parent = self.mesh.elems[i]
-            newpos = parent.nodes.coordinate[1]  + parent.nodes.coordinate[0] / 2
-            new_id = self.mesh.nodeset[-1].id
-            child1_id = self.mesh.elems[-1].id + 1
-            child2_id = self.mesh.elems[-1].id + 2
-            new_node= node(new_id, newpos,level = level_new)
-            self.mesh.nodeset.append(new_node)
-            child1 = element(child1_id, [parent.nodes.coordinate[0] , new_node], p_order = parent.p_order, parent=parent, level=level_new, active=True)
-            child2 = element(child2_id,[new_node,parent.nodes.coordinate[1]],  p_order = parent.p_order,level=level_new,parent=parent, active=True)
+            left = parent.nodes[0]
+            right = parent.nodes[1]
+
+            print("LEFT:", left.id, left.coordinate)
+            print("RIGHT:", right.id, right.coordinate)
+
+            newpos = (left.coordinate + right.coordinate) / 2
+
+            print("NEW:", newpos)
+            new_id = len(self.mesh.node_set)
+            child1_id = len(self.mesh.elems)
+            child2_id = len(self.mesh.elems) + 1
+            new_node= node(new_id, newpos, level = level_new)
+            self.mesh.node_set.append(new_node)
+            child1 = element(child1_id, [parent.nodes[0] , new_node], p_order = parent.p_order, parent=parent, level=level_new)
+            child2 = element(child2_id, [new_node,parent.nodes[1]],  p_order = parent.p_order,level=level_new,parent=parent)
             self.mesh.elems.append(child1)
             self.mesh.elems.append(child2)
             parent.children.extend([self.mesh.elems[-2],self.mesh.elems[-1]])
@@ -110,16 +126,43 @@ class refiner:
 
 
 
-mesh1 = mesh(10,20, 2)
+mesh1 = mesh(4,5, 2)
+mesh1.gen_init_mesh()
+marked_elem_p = [0,3]
+marked_elem_h = [1]
+
+refine = refiner(mesh1, marked_elem_h, marked_elem_p)
+
+refine.refine_h()
+refine.refine_p()
+
+activee = mesh1.active_elements
+activen = mesh1.active_nodes
 
 
-refiner = refiner(mesh1)
 
-refiner.refine_h()
-refiner.refine_p()
 
-mesh1.active_elements
-mesh1.active_nodes
+for e in refine.mesh.active_elements:
+    print(
+        "Element:", e.id,
+        "nodes:", [n.id for n in e.nodes],
+        "coordinates:", [n.coordinate for n in e.nodes],
+        "p:", e.p_order,
+        "level:", e.level,
+        "active:", e.active
+    )
+
+
+for e in activen:
+    print(
+        "Element", e.id,
+        "nodes:", [n.id for n in e.nodes],
+        "p:", e.p_order,
+        "level:", e.level,
+        "active:", e.active
+    )
+
+
 
 
 
