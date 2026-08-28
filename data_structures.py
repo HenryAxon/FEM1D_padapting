@@ -1,6 +1,17 @@
-## Implementing the datastructures for nodes, edges... "topology" descrbibed in 2016 multilevel hp-refinement paper cited by Notaros and Harmom
-# 4 classes for edge node face elements and topology parent class which defines most aspects of the RBS procedure. 
+## Implementing the datastructures for nodes, edges, faces, solids... "topology" as descrbibed in 2016 multilevel hp-refinement paper from Nils Zander et al. 
 # deactivate all topological components of the overlay mesh whose adjacecy list contains elements of different levels.
+# Currently can create mesh and refine in h and p, NOT ADAPTIVE. 
+# 
+# NEED TO IMPLEMENT: 
+# 1) degrees of freedom deactivation on elements
+# 2) basis function implementation on elements
+# 3) the function space continuity requirements of H(div),normal/Raviart THomas space and H(curl), tangential/Nedelec space, which should be relatively simple, but the goal 
+# is to stitch the two together without an if else statement,
+# presumably somehow based on information that is included from the initial setup of the problem? 
+# 4) reread the Notaros implementation and compare to Ross code structure to learn the anisotropic version and identify where the 2D version will be implemented.
+
+
+
 import numpy as np
 
 
@@ -101,7 +112,8 @@ class mesh:
 
             
 
-# all we are really doing in 1D is technically just 1 edge refinement
+# all we are really doing in 1D is technically just 1 edge refinement so to speak, and there is no directionality - which of course limits the use of this code, given that the 
+# actual goals are to produce effective anisotropic hp refinement. 
 
     
 
@@ -145,6 +157,8 @@ class refiner:
             self.mesh.elems[i].p_order +=1
         return self.mesh
 
+class degrees_of_freedom:
+    def __init__(self,mesh,):
 
 
 
@@ -184,46 +198,4 @@ for e in activen:
         "level:", e.level,
         "active:", e.active
     )
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# # manually creating a small mesh to larn how the classes work together for 1D
-# n0 = node(0, 0)
-# n1 = node(1,1)
-
-# n2 = node(2,2)
-# n3 = node(3,3)
-# n4= node(4,4)
-
-# e1 = [n0,n1]
-# e2 = [n1,n2]
-# e3 = [n2, n3]
-# e4= [n3, n4]
-
-# # creating each element
-# E1 = element(0, e1, p_order=2,level=0,parent=None)
-# E2 = element(1, e2, p_order=2, level=0,parent=None)
-# E3 = element(2, e3, p_order = 2, level=0, parent=None)
-# E4 = element(3, e4, p_order=2, level=0, parent=None)
-
-# # manual h-refinement:
-# n5 = node(5,1.5,level=1)
-# e5 = [n1,n5]
-# e6 = [n5,n2]
-# E5  = element(4,e5, p_order=2, level=1,parent =E2)
-# E6 = element(5, e6,p_order=2, level=1,parent=E2)
-
-# E2.children = [E5,E6]
-# E2.active= False
 
