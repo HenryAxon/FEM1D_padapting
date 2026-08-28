@@ -1,6 +1,9 @@
 ## Implementing the datastructures for nodes, edges... "topology" descrbibed in 2016 multilevel hp-refinement paper cited by Notaros and Harmom
 # 4 classes for edge node face elements and topology parent class which defines most aspects of the RBS procedure. 
 # deactivate all topological components of the overlay mesh whose adjacecy list contains elements of different levels.
+import numpy as np
+
+
 class topology:
     #store base mesh, and mesh levels in general
     def __init__(self, id,active, level=0, parent=None):
@@ -13,8 +16,6 @@ class topology:
     def is_leaf(self):
         #if len(self.children) == 0:
         return len(self.children) == 0
-
-
 
 
 
@@ -50,6 +51,42 @@ class element(topology):
     def boundary_cond(self):
 
         return []
+
+class mesh:
+    def __init__(self,L, N, p, layer=0):
+        self.L = L
+        self.N = N
+        self.p = p
+        self.layer = layer
+
+    def gen_init_mesh(self):
+        nodes = np.linspace(0,self.L,self.N)
+        n_index = np.linspace(0,len(nodes))
+        elems = []
+        node_set = []
+        for i in range(len(nodes)):
+            node_set.append(node(i, nodes[i],level=self.layer))
+        for j in range(1,len(nodes)):
+            elems.append(element(j-1, [node_set[j-1],node_set[j]], p_order = self.p, level=self.layer, parent=None))
+        return node_set, elems
+            
+mesh1 = mesh(10,20, 2)
+nodes, elems = mesh1.gen_init_mesh()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
