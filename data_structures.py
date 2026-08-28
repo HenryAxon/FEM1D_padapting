@@ -58,17 +58,23 @@ class mesh:
         self.N = N
         self.p = p
         self.layer = layer
+        self.node_set = []
+        self.elems = []
+
+        
 
     def gen_init_mesh(self):
         nodes = np.linspace(0,self.L,self.N)
         n_index = np.linspace(0,len(nodes))
-        elems = []
-        node_set = []
+        #lems = []
+        #ode_set = []
         for i in range(len(nodes)):
-            node_set.append(node(i, nodes[i],level=self.layer))
+            self.node_set.append(node(i, nodes[i],level=self.layer))
         for j in range(1,len(nodes)):
-            elems.append(element(j-1, [node_set[j-1],node_set[j]], p_order = self.p, level=self.layer, parent=None))
-        return node_set, elems
+            self.elems.append(element(j-1, [self.node_set[j-1], self.node_set[j]], p_order = self.p, level=self.layer, parent=None))
+        return self.node_set, self.elems
+
+    
 
 class refiner:
     def __init__(self, mesh, marked_elem_h, marked_elem_p):
@@ -81,17 +87,18 @@ class refiner:
         level_new = self.mesh.layer +1
         for i in self.marked_elem_h:
             parent = self.mesh.elems[i]
-            newpos = self.mesh.nodeset[i+1] - self.mesh.nodeset[i-1] / 2
+            newpos = parent.nodes.coordinate[1]  + parent.nodes.coordinate[0] / 2
             new_id = self.mesh.nodeset[-1].id
             child1_id = self.mesh.elems[-1].id + 1
             child2_id = self.mesh.elems[-1].id + 2
             new_node= node(new_id, newpos,level = level_new)
             self.mesh.nodeset.append(new_node)
-            child1 = element(child1_id, [self.mesh.nodeset[i-1], new_node], p_order = parent.p_order, parent=parent, level=level_new)
-            child2 = element(child2_id,[new_node,self.mesh.nodeset[i+1]],  p_order = parent.p_order,level=level_new,parent=parent)
+            child1 = element(child1_id, [parent.nodes.coordinate[0] , new_node], p_order = parent.p_order, parent=parent, level=level_new, active=True)
+            child2 = element(child2_id,[new_node,parent.nodes.coordinate[1]],  p_order = parent.p_order,level=level_new,parent=parent, active=True)
             self.mesh.elems.append(child1)
             self.mesh.elems.append(child2)
-            parent.children.append([self.mesh.elems[-2],self.mesh.elems[-1]])
+            parent.children.extend([self.mesh.elems[-2],self.mesh.elems[-1]])
+            parent.active = False
             return self.mesh
 
     def refine_p(self):
