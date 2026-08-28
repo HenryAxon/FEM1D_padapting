@@ -136,13 +136,14 @@ class refiner:
             self.mesh.elems.append(child2)
             parent.children.extend([self.mesh.elems[-2],self.mesh.elems[-1]])
             parent.active = False
-            return self.mesh
+        self.mesh.adjacency_info()
+        return self.mesh
 
     def refine_p(self):
         
         for i in self.marked_elem_p:
             self.mesh.elems[i].p_order +=1
-            return self.mesh
+        return self.mesh
 
 
 
@@ -170,7 +171,8 @@ for e in refine.mesh.active_elements:
         "coordinates:", [n.coordinate for n in e.nodes],
         "p:", e.p_order,
         "level:", e.level,
-        "active:", e.active
+        "active:", e.active,
+        "adjacency list", e.adjacency_list
     )
 
 
