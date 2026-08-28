@@ -24,11 +24,10 @@ class node(topology):
     def __init__(self, id, coordinate, level=0, parent=None):
         super().__init__(id, level, parent)
         self.coordinate = coordinate
+        self.adjacent_elem = []
   
 
-        
-        
-
+    
 class edge(topology):
     def __init__(self, id, nodes, level, parent):
         super().__init__(id, level, parent)
@@ -42,15 +41,16 @@ class element(topology):
         super().__init__(id=id, active=True, level=level, parent=parent)
         self.p_order = p_order
         self.nodes = nodes
+        self.adjacency_list = []
 
     def deactivate(self):
         if self.active == False:
             p_order = 0 
         return p_order
 
-    def boundary_cond(self):
 
-        return []
+
+
 
 class mesh:
     def __init__(self,L, N, p, layer=0):
@@ -61,7 +61,6 @@ class mesh:
         self.node_set = []
         self.elems = []
         #self.active_elems = []
-       
         
 
     def gen_init_mesh(self):
@@ -81,6 +80,28 @@ class mesh:
     @property
     def active_nodes(self):
         return [n for n in self.node_set if n.active]
+
+
+    def adjacency_info(self):
+        for element_item in self.elems:
+            element_item.adjacency_list = []
+
+        for index, element_item in enumerate(self.elems):
+            if index > 0:
+                element_item.adjacency_list.append(self.elems[index - 1])
+            if index < len(self.elems) - 1:
+                element_item.adjacency_list.append(self.elems[index + 1])
+
+        for node_item in self.node_set:
+            node_item.adjacent_elem = [
+                element_item.id
+                for element_item in self.elems
+                if node_item in element_item.nodes
+        ]
+
+            
+
+# all we are really doing in 1D is technically just 1 edge refinement
 
     
 
