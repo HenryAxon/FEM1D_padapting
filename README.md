@@ -9,3 +9,8 @@ It is ultimately a work in progress.
 
 To run, simply set the length of your "wire" domain (L), the number of FEM elements you would like (M), and then the initial polynomial orders (n). Then choose either "scattering" or "waveguide" to solve which 
 problem you desire. And then "HW" solution simply solves the scattering problem as described in ECE 540 assignment, but with adaptive anisotropic mesh refinement.
+
+
+
+## New file - data_structures
+This is my attempt at implementing a hp refinement algorithm using RBS in 1D to perform function space agnostic refinement.
