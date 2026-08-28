@@ -24,11 +24,10 @@ class node(topology):
     def __init__(self, id, coordinate, level=0, parent=None):
         super().__init__(id, level, parent)
         self.coordinate = coordinate
+        self.adjacent_elem = []
   
 
-        
-        
-
+    
 class edge(topology):
     def __init__(self, id, nodes, level, parent):
         super().__init__(id, level, parent)
@@ -39,18 +38,19 @@ class edge(topology):
 
 class element(topology):
     def __init__(self, id,nodes,p_order, level, parent):
-        super().__init__(id, level, parent)
+        super().__init__(id=id, active=True, level=level, parent=parent)
         self.p_order = p_order
         self.nodes = nodes
+        self.adjacency_list = []
 
     def deactivate(self):
         if self.active == False:
             p_order = 0 
         return p_order
 
-    def boundary_cond(self):
 
-        return []
+
+
 
 class mesh:
     def __init__(self,L, N, p, layer=0):
@@ -60,7 +60,7 @@ class mesh:
         self.layer = layer
         self.node_set = []
         self.elems = []
-
+        #self.active_elems = []
         
 
     def gen_init_mesh(self):
@@ -73,6 +73,35 @@ class mesh:
         for j in range(1,len(nodes)):
             self.elems.append(element(j-1, [self.node_set[j-1], self.node_set[j]], p_order = self.p, level=self.layer, parent=None))
         return self.node_set, self.elems
+    @property
+    def active_elements(self):
+        return [e for e in self.elems if e.active]
+
+    @property
+    def active_nodes(self):
+        return [n for n in self.node_set if n.active]
+
+
+    def adjacency_info(self):
+        for element_item in self.elems:
+            element_item.adjacency_list = []
+
+        for index, element_item in enumerate(self.elems):
+            if index > 0:
+                element_item.adjacency_list.append(self.elems[index - 1])
+            if index < len(self.elems) - 1:
+                element_item.adjacency_list.append(self.elems[index + 1])
+
+        for node_item in self.node_set:
+            node_item.adjacent_elem = [
+                element_item.id
+                for element_item in self.elems
+                if node_item in element_item.nodes
+        ]
+
+            
+
+# all we are really doing in 1D is technically just 1 edge refinement
 
     
 
@@ -83,45 +112,78 @@ class refiner:
         self.marked_elem_p = marked_elem_p
 
     def refine_h(self):
-        elements, nodes = self.mesh
+        #elements, nodes = self.mesh
         level_new = self.mesh.layer +1
         for i in self.marked_elem_h:
             parent = self.mesh.elems[i]
-            newpos = parent.nodes.coordinate[1]  + parent.nodes.coordinate[0] / 2
-            new_id = self.mesh.nodeset[-1].id
-            child1_id = self.mesh.elems[-1].id + 1
-            child2_id = self.mesh.elems[-1].id + 2
-            new_node= node(new_id, newpos,level = level_new)
-            self.mesh.nodeset.append(new_node)
-            child1 = element(child1_id, [parent.nodes.coordinate[0] , new_node], p_order = parent.p_order, parent=parent, level=level_new, active=True)
-            child2 = element(child2_id,[new_node,parent.nodes.coordinate[1]],  p_order = parent.p_order,level=level_new,parent=parent, active=True)
+            left = parent.nodes[0]
+            right = parent.nodes[1]
+
+            print("LEFT:", left.id, left.coordinate)
+            print("RIGHT:", right.id, right.coordinate)
+
+            newpos = (left.coordinate + right.coordinate) / 2
+
+            print("NEW:", newpos)
+            new_id = len(self.mesh.node_set)
+            child1_id = len(self.mesh.elems)
+            child2_id = len(self.mesh.elems) + 1
+            new_node= node(new_id, newpos, level = level_new)
+            self.mesh.node_set.append(new_node)
+            child1 = element(child1_id, [parent.nodes[0] , new_node], p_order = parent.p_order, parent=parent, level=level_new)
+            child2 = element(child2_id, [new_node,parent.nodes[1]],  p_order = parent.p_order,level=level_new,parent=parent)
             self.mesh.elems.append(child1)
             self.mesh.elems.append(child2)
             parent.children.extend([self.mesh.elems[-2],self.mesh.elems[-1]])
             parent.active = False
-            return self.mesh
+        self.mesh.adjacency_info()
+        return self.mesh
 
     def refine_p(self):
         
         for i in self.marked_elem_p:
             self.mesh.elems[i].p_order +=1
-            return self.mesh
+        return self.mesh
 
 
 
 
-            
-mesh1 = mesh(10,20, 2)
-nodes, elems = mesh1.gen_init_mesh()
+mesh1 = mesh(4,5, 2)
+mesh1.gen_init_mesh()
+marked_elem_p = [0,3]
+marked_elem_h = [1]
+
+refine = refiner(mesh1, marked_elem_h, marked_elem_p)
+
+refine.refine_h()
+refine.refine_p()
+
+activee = mesh1.active_elements
+activen = mesh1.active_nodes
 
 
 
 
-# next need way to assing dofs on each element according the p order of the element,  refining p is easy now - simply p+=1!
+for e in refine.mesh.active_elements:
+    print(
+        "Element:", e.id,
+        "nodes:", [n.id for n in e.nodes],
+        "coordinates:", [n.coordinate for n in e.nodes],
+        "p:", e.p_order,
+        "level:", e.level,
+        "active:", e.active,
+        "adjacency list", e.adjacency_list
+    )
 
 
-def h_refine(marked, mesh):
-    elements = mesh.elems
+for e in activen:
+    print(
+        "Element", e.id,
+        "nodes:", [n.id for n in e.nodes],
+        "p:", e.p_order,
+        "level:", e.level,
+        "active:", e.active
+    )
 
 
 
@@ -132,32 +194,36 @@ def h_refine(marked, mesh):
 
 
 
-# manually creating a small mesh to larn how the classes work together for 1D
-n0 = node(0, 0)
-n1 = node(1,1)
 
-n2 = node(2,2)
-n3 = node(3,3)
-n4= node(4,4)
 
-e1 = [n0,n1]
-e2 = [n1,n2]
-e3 = [n2, n3]
-e4= [n3, n4]
 
-# creating each element
-E1 = element(0, e1, p_order=2,level=0,parent=None)
-E2 = element(1, e2, p_order=2, level=0,parent=None)
-E3 = element(2, e3, p_order = 2, level=0, parent=None)
-E4 = element(3, e4, p_order=2, level=0, parent=None)
 
-# manual h-refinement:
-n5 = node(5,1.5,level=1)
-e5 = [n1,n5]
-e6 = [n5,n2]
-E5  = element(4,e5, p_order=2, level=1,parent =E2)
-E6 = element(5, e6,p_order=2, level=1,parent=E2)
+# # manually creating a small mesh to larn how the classes work together for 1D
+# n0 = node(0, 0)
+# n1 = node(1,1)
 
-E2.children = [E5,E6]
-E2.active= False
+# n2 = node(2,2)
+# n3 = node(3,3)
+# n4= node(4,4)
+
+# e1 = [n0,n1]
+# e2 = [n1,n2]
+# e3 = [n2, n3]
+# e4= [n3, n4]
+
+# # creating each element
+# E1 = element(0, e1, p_order=2,level=0,parent=None)
+# E2 = element(1, e2, p_order=2, level=0,parent=None)
+# E3 = element(2, e3, p_order = 2, level=0, parent=None)
+# E4 = element(3, e4, p_order=2, level=0, parent=None)
+
+# # manual h-refinement:
+# n5 = node(5,1.5,level=1)
+# e5 = [n1,n5]
+# e6 = [n5,n2]
+# E5  = element(4,e5, p_order=2, level=1,parent =E2)
+# E6 = element(5, e6,p_order=2, level=1,parent=E2)
+
+# E2.children = [E5,E6]
+# E2.active= False
 
