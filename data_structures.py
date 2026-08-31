@@ -92,6 +92,32 @@ class mesh:
     def active_nodes(self):
         return [n for n in self.node_set if n.active]
 
+    @property
+    def jacobian_finder(self):
+        jacobians = []
+        for i in range(len(self.active_elements)):
+            nodes = self.active_elements[i].nodes
+            coord_1 = nodes[0].coordinate
+            coord_2 = nodes[1].coordinate
+            jacobians.append((coord_2 - coord_1) / 2)
+        return jacobians
+
+    @property
+    def gaussian_integral_points(self):
+        '''
+        property to find the gaussian integral points on each element to then perform integration to form the 
+        K, M matrices for solving problems on the active elements
+        '''
+        gauss_info = []
+        
+        for i in range(len(self.active_elements)):
+            [x,w] = np.polynomial.legendre.leggauss(20)
+            gauss_info.append([x,w])
+
+        return gauss_info
+
+
+
 
     def adjacency_info(self):
         for element_item in self.elems:
@@ -109,6 +135,24 @@ class mesh:
                 for element_item in self.elems
                 if node_item in element_item.nodes
         ]
+
+    def deactivate(self):
+        '''
+        Meant to deactivate the child elements overlapping nodes to allow the parent elements nodes to 
+        have precedence in degree of freedom.
+        '''
+        for node_item in self.node_set:
+            adjacent = node_item.adjacent_elem
+            if adjacent.level < node_item.level and node_item in adjacent.node_set:
+                node_item.active = False
+                node_item.p_order = 0
+    
+    def plot_mesh(self, ax=None, annotate=True, show_nodes=False):
+        if ax is None:
+            fig, ax = plt.subplots()
+        for element in self.elems:
+            element.plot(ax=ax, annotate=annotate, show_nodes=show_nodes)
+        return ax
 
             
 
@@ -148,6 +192,7 @@ class refiner:
             self.mesh.elems.append(child2)
             parent.children.extend([self.mesh.elems[-2],self.mesh.elems[-1]])
             parent.active = False
+            parent.p_order = 0
         self.mesh.adjacency_info()
         return self.mesh
 
@@ -157,8 +202,122 @@ class refiner:
             self.mesh.elems[i].p_order +=1
         return self.mesh
 
-class degrees_of_freedom:
-    def __init__(self,mesh,):
+
+
+def basis_eval(j, p, s):
+    """Hierarchical shape functions on the reference element [-1, 1]."""
+
+    if j == p+1:
+        f_base = 0.5 * (1 + s)
+        df_base = 0.5
+    elif j == 1:
+        f_base = 0.5 * (1 - s) * (1 + s) ** (j-1)
+        df_base = -0.5
+    else:
+        f_base = 0.5 * (1 - s) * (1 + s) ** (j-1)
+        df_base = 0.5 * (-(1 + s) ** (j-1) + (j-1) * (1 - s) * (1 + s) ** (j - 2))
+        
+        #print(f"Basis function {j}: f_base = {f_base}, df_base = {df_base}")
+    return f_base, df_base
+
+
+
+
+
+def K_integrals(p, i, j, alpha, beta, jacob):
+    #'Integrals via gaussian quadrature for stiffness matrix', using 20 points purely to match Cam Key results
+    x, w = np.polynomial.legendre.leggauss(20)
+    integral = 0.0
+    for q in range(len(x)):
+        #f, df = basis_eval( n, x[q])
+        # mass-like term uses the jacobian, stiffness-like term divides by it
+        # (physical derivative = reference derivative / jacobian)
+        integral += w[q] * ( basis_eval(i, p, x[q])[1] * basis_eval(j, p, x[q])[1])
+    integral = -integral*alpha/jacob
+    return integral
+ 
+ 
+def M_integrals(p, i, j, beta, jacob):
+    #'perform integrals via gaussian quadrature for mass matrix'
+    x, w = np.polynomial.legendre.leggauss(20)
+    integral = 0.0
+    for q in range(len(x)):
+        #f, df = basis_eval(i, n, x[q])
+        #print(f)
+        integral += w[q] *  basis_eval(i, p, x[q])[0] * basis_eval(j, p, x[q])[0]
+    integral = integral*beta*jacob
+    return integral
+ 
+ 
+def K_fill_local(p_order, alpha, beta, jacob):
+    #'Fill each element stiffness matrix'
+    K_loc = np.zeros((p_order+1, p_order+1))
+    for i in range(1, p_order+2):
+        for j in range(1, p_order+2):
+            K_loc[i-1, j-1] = K_integrals(p_order, i, j, alpha, beta, jacob)
+    return K_loc
+ 
+ 
+def M_fill_local(p_order, beta, jacob):
+    #'Filling each block for each element of M_ij'
+    M_loc = np.zeros((p_order+1, p_order+1))
+    for i in range(1, p_order+2):
+        for j in range(1, p_order+2):
+            M_loc[i-1, j-1] = M_integrals(p_order, i, j, beta, jacob)
+    return M_loc
+ 
+ 
+def K_fill_global(M, meshy, alpha=1, beta=1):
+    #'Stiffness matrix builder '
+    nodes, elements, jac, p_orders, dof = meshy
+    K_globe = np.zeros((len(nodes), len(nodes)))
+    for e in range(M):
+        elem = elements[e]
+        current_jacob = jac[e]
+        current_p_order = p_orders[e]
+        K_loc = K_fill_local(current_p_order, alpha, beta, current_jacob)
+        for i in range(current_p_order+1):
+            for j in range(current_p_order+1):
+                I = elem[i]
+                J = elem[j]
+                K_globe[I, J] += K_loc[i, j]
+    return K_globe
+ 
+ 
+def M_fill_global(M, meshy, beta=1):
+    #"Mass matrix builder"
+    nodes, elements, jac, p_orders,dof = meshy
+    M_globe = np.zeros((len(nodes), len(nodes)))
+    for e in range(M):
+        elem = elements[e]
+        current_jacob = jac[e]
+        current_p_order = p_orders[e]
+        M_loc = M_fill_local(current_p_order, beta, current_jacob)
+        for i in range(current_p_order+1):
+            for j in range(current_p_order+1):
+                I = elem[i]
+                J = elem[j]
+                M_globe[I, J] += M_loc[i, j]
+    return M_globe
+ 
+ 
+def weights_unknown(N):
+    return np.zeros(N)
+ 
+ 
+def G_assemble(g, meshy):
+    #"excitation vector ==0 unless other g specified"
+    nodes, elements, jac, p_orders, dof = meshy
+    G = np.zeros(dof)
+    if g != 0:
+        G[:] = g
+    return G
+ 
+ 
+
+
+
+
 
 
 
