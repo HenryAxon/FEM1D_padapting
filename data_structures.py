@@ -44,6 +44,26 @@ class edge(topology):
         super().__init__(id, level, parent)
         self.nodes = nodes
 
+
+
+# technically these will only be used when doing 2D version of the algorithm. the 1d is all the same. 
+    @property
+    def tangent(self):
+
+        x0 = np.asarray(self.nodes[0].coordinate)
+        x1 = np.asarray(self.nodes[1].coordinate)
+
+        t = x1 - x0
+
+        return t / np.linalg.norm(t)
+
+    @property
+    def normal(self):
+        # as in paper - rotate the Nedelec element (t) 90 degrees to get the normal element!!!
+        t = self.tangent
+        return np.array([t[1], -t[0]])
+
+
 #class face(topology):
 
 
@@ -187,7 +207,7 @@ class refiner:
             new_node= node(new_id, newpos, level = level_new)
             self.mesh.node_set.append(new_node)
             child1 = element(child1_id, [parent.nodes[0] , new_node], p_order = parent.p_order, parent=parent, level=level_new)
-            child2 = element(child2_id, [new_node,parent.nodes[1]],  p_order = parent.p_order,level=level_new,parent=parent)
+            child2 = element(child2_id, [new_node, parent.nodes[1]],  p_order = parent.p_order,level=level_new,parent=parent)
             self.mesh.elems.append(child1)
             self.mesh.elems.append(child2)
             parent.children.extend([self.mesh.elems[-2],self.mesh.elems[-1]])
@@ -204,22 +224,105 @@ class refiner:
 
 
 
-def basis_eval(j, p, s):
-    """Hierarchical shape functions on the reference element [-1, 1]."""
+# in 1d these are essentially the same, but writing the skeleton can still be useful for the 2D implementation
 
-    if j == p+1:
-        f_base = 0.5 * (1 + s)
-        df_base = 0.5
-    elif j == 1:
-        f_base = 0.5 * (1 - s) * (1 + s) ** (j-1)
-        df_base = -0.5
-    else:
-        f_base = 0.5 * (1 - s) * (1 + s) ** (j-1)
-        df_base = 0.5 * (-(1 + s) ** (j-1) + (j-1) * (1 - s) * (1 + s) ** (j - 2))
-        
-        #print(f"Basis function {j}: f_base = {f_base}, df_base = {df_base}")
-    return f_base, df_base
 
+class func_space:
+    def __init__(self, element):
+        self.element = element
+
+    def get_local_dofs(self, element):
+        dofs = []
+
+        # vertex DOFs
+        for node in element.nodes:
+            dofs.append(node)
+
+        # interior DOFs
+        for i in range(element.p_order - 1):
+            dofs.append((element, i))
+
+        return dofs
+
+
+    def get_global_dof(self):
+        neighbors = self.element.adjacent_list
+        nodes = self.element.nodes
+        # look into the different dofs and find the overlapping ones. in 1D this is literally just finding what nodes are what global dof
+        globalList = []
+        for i in range(len(neighbors)):
+            nodes_neigh = neighbors[i].nodes
+            for j in range(len(nodes)):
+                globalList.append(nodes_neigh[i] if nodes_neigh[i] == nodes[i])
+
+class DOFManager:
+
+    def __init__(self):
+        self.global_dofs = {}
+        self.next_id = 0
+
+    def get_global_dof(self, local_dof):
+
+        if local_dof not in self.global_dofs:
+            self.global_dofs[local_dof] = self.next_id
+            self.next_id += 1
+
+        return self.global_dofs[local_dof]
+
+class H1_cont(func_space):
+    
+    def basis(self, element, s):
+
+        p = element.p_order
+
+        return [
+            basis_eval(j, p, s)[0]
+            for j in range(1, p + 2)
+        ]
+
+    def local_dofs(self, element):
+
+        # vertex DOFs
+        dofs = [
+            ("node", element.nodes[0].id),
+            ("node", element.nodes[1].id)
+        ]
+
+        # element-interior DOFs
+        for j in range(1, element.p_order):
+            dofs.append(("element", element.id, j))
+
+        return dofs
+
+class raviart_thomas_cont(func_space):
+    #associate tangential component on geometric component
+    def enforce_curl(self,element,s):
+        p = element.p_order
+        basis = []
+
+
+
+
+        return tans
+
+
+class nedelec_cont(func_space):
+    # "associate" normal component on geometric component
+    def enforce_div(self, element, s):
+        p = element.p_order
+        basis = []
+        return divs 
+    
+
+
+    
+
+
+class dof_manager:
+    def __init__(self, mesh):
+        self.mesh = mesh
+
+    def compute_total_dofs(self):
 
 
 
@@ -270,7 +373,11 @@ def M_fill_local(p_order, beta, jacob):
 def K_fill_global(M, meshy, alpha=1, beta=1):
     #'Stiffness matrix builder '
     nodes, elements, jac, p_orders, dof = meshy
-    K_globe = np.zeros((len(nodes), len(nodes)))
+
+
+    ndof = dof_manager.num_dofs
+    K_globe = np.zeros((ndof, ndof))
+    #K_globe = np.zeros((len(nodes), len(nodes)))
     for e in range(M):
         elem = elements[e]
         current_jacob = jac[e]
@@ -312,9 +419,123 @@ def G_assemble(g, meshy):
     if g != 0:
         G[:] = g
     return G
- 
- 
 
+
+ 
+def boundary(G, K, L, btype):
+    #""'Neumann BC as specified in the problem statement. Dirichlet not yet defined, will need to do so'
+    #A bit confused on implementing and derivign different BC. Think I am rusty
+    G = G.copy()
+    K = K.copy()
+    if btype == 'dirichlet':
+        G[0] = 1
+        G[-1] = -np.cos(L)
+    elif btype == 'neumann':
+        G[0] = 1
+        G[-1] = -np.cos(L)
+    return G, K
+ 
+ 
+def waveguide(K, Mmat):
+    # This is not necessarily fully incorporated into the overally p-refining scheme
+    # eigenproblem K x = lambda Mmat x 
+    vals, vecs = scipy.linalg.eig(K, Mmat)
+    return vals, vecs
+ 
+ 
+def scattering(K, G,L):
+    soln = scipy.linalg.solve(K, G)
+    #error = error_scatter(soln,L)
+    return soln
+ 
+ 
+def HW(K, G,L):
+    #soln = scipy.linalg.solve(K, G)
+    #error = error_scatter(soln,L)
+    soln = np.linalg.inv(K).dot(G)
+    
+    return soln
+
+
+
+
+ 
+def local_errors(approx, exact, L, M,n):
+    """Compute local errors for each element."""
+    nodes, elements, jac, p_orders = mesh(L, M, n)
+    local_errors = np.zeros(M)
+    for e in range(M):
+        elem = elements[e]
+        approx_local = approx[elem]
+        exact_local = exact[elem]
+        local_errors[e] = np.sqrt(np.sum((approx_local - exact_local) ** 2))
+    return local_errors
+
+
+def p_refine(mesh_info, local_errors, threshold):
+    sort_indices = np.argsort(local_errors,descending=True)
+    sorted_errors = np.sort(local_errors,descending=True)
+    top_to_refine = sort_indices[:len(sorted_errors)//3]
+    refine = local_errors[top_to_refine]
+    new_mesh_info = mesh_info
+    mesh_elem = mesh_info[1]
+    for i in range(len(refine)):
+        if refine[i] > threshold:
+            new_mesh_info[3][mesh_elem.index(top_to_refine[i])] += 1  
+        else:
+            break
+    return new_mesh_info
+
+
+def dual_weight_residual_global(solution, higher_order_soln):
+    '''Computing DWR for the whole domain, using the solution and enriched solution to error estimate.
+    In this case the operator L is self adjoint, so dual is same as primal, but the excitation is 
+    then the divergence of the primal solution, giving the "charge" density to the primals E field.'''
+
+    
+    soln = solution
+    enriched_soln = higher_order_soln
+    interpolated_soln = np.interp(np.linspace(0, 1, len(enriched_soln)), np.linspace(0, 1, len(soln)), soln)
+    error_estimate = np.gradient(enriched_soln) - np.gradient(interpolated_soln)
+    inner_product = np.dot(enriched_soln, interpolated_soln)
+    DWR = np.abs(inner_product) * error_estimate
+
+    return DWR
+
+
+
+def basis_scale_plotting(solution_in, L, M, mesh):
+    '''From Cam Key code (adapted) scales the solution to the physical output!'''
+    nodes, elems, jac, p_order, dof = mesh
+    s = np.linspace(-1, 1, 100)
+    plot_samps = np.zeros(M * 100)
+    s_len = len(s)
+    for e in range(M):
+        elem = elems[e]
+        for j_local in range(1, p_order[e] + 2):
+            coeff = solution_in[elem[j_local - 1]]
+            for k in range(s_len):
+                plot_samps[e * s_len + k] += coeff * basis_eval(j_local, p_order[e], s[k])[0]
+    return plot_samps
+
+
+
+
+def p_refine_DWR_global(type, L, M, p_orders, g=0):
+    # Use the DWR to refine the mesh with p refinement - no longer only globally
+    p_orders = np.asarray(p_orders, dtype=int)
+    low_order, low_order_plotting, mesher1 = main(p_orders, type, L, M, g)
+    high_order, high_order_plotting, mesher2 = main(p_orders + 1, type, L, M, g)
+    DWR = dual_weight_residual_global(low_order_plotting, high_order_plotting)
+    error_indicators = DWR * high_order_plotting
+    print(f'length of error: {len(error_indicators)}')
+    return DWR, error_indicators, low_order_plotting, mesher1
+
+
+
+
+# need to compute the low order initial basis funcitons across the global domain in the very first initial mesh. Then refinement is when we then superimpose the local p refinements 
+# on top. the only dof for the low order basis is on the boundaries between elements so the local are not suhc a problem.save these in the mesh?? 
 
 
 
@@ -357,4 +578,6 @@ for e in activen:
         "level:", e.level,
         "active:", e.active
     )
+
+
 
