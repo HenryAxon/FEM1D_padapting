@@ -13,6 +13,7 @@
 
 
 import numpy as np
+import matplotlib as plt
 
 
 class topology:
@@ -43,35 +44,27 @@ class edge(topology):
     def __init__(self, id, nodes, level, parent):
         super().__init__(id, level, parent)
         self.nodes = nodes
+        self.adjacency = []
 
+class face(topology):
+    def __init__(self, id, nodes,edges, level, parent):
+        super().__init__(id, level, parent)
+        self.edges = edges
+        self.nodes = nodes
+        self.adjacent = []
 
-
-# technically these will only be used when doing 2D version of the algorithm. the 1d is all the same. 
-    @property
-    def tangent(self):
-
-        x0 = np.asarray(self.nodes[0].coordinate)
-        x1 = np.asarray(self.nodes[1].coordinate)
-
-        t = x1 - x0
-
-        return t / np.linalg.norm(t)
-
-    @property
-    def normal(self):
-        # as in paper - rotate the Nedelec element (t) 90 degrees to get the normal element!!!
-        t = self.tangent
-        return np.array([t[1], -t[0]])
 
 
 #class face(topology):
 
 
 class element(topology):
-    def __init__(self, id,nodes,p_order, level, parent):
+    def __init__(self, id,nodes,edges,faces,p_order, level, parent):
         super().__init__(id=id, active=True, level=level, parent=parent)
         self.p_order = p_order
         self.nodes = nodes
+        self.edges = edges
+        self.faces = faces
         self.adjacency_list = []
 
     def deactivate(self):
@@ -96,6 +89,8 @@ class mesh:
 
     def gen_init_mesh(self):
         nodes = np.linspace(0,self.L,self.N)
+        #nodesy = np.linspace(0, self.L, self.N)
+        #nodes = np.meshgrid(nodesx, nodesy)
         n_index = np.linspace(0,len(nodes))
         #lems = []
         #ode_set = []
@@ -245,15 +240,15 @@ class func_space:
         return dofs
 
 
-    def get_global_dof(self):
-        neighbors = self.element.adjacent_list
-        nodes = self.element.nodes
-        # look into the different dofs and find the overlapping ones. in 1D this is literally just finding what nodes are what global dof
-        globalList = []
-        for i in range(len(neighbors)):
-            nodes_neigh = neighbors[i].nodes
-            for j in range(len(nodes)):
-                globalList.append(nodes_neigh[i] if nodes_neigh[i] == nodes[i])
+    # def get_global_dof(self):
+    #     neighbors = self.element.adjacent_list
+    #     nodes = self.element.nodes
+    #     # look into the different dofs and find the overlapping ones. in 1D this is literally just finding what nodes are what global dof
+    #     globalList = []
+    #     for i in range(len(neighbors)):
+    #         nodes_neigh = neighbors[i].nodes
+    #         for j in range(len(nodes)):
+    #             globalList.append(nodes_neigh[i] if nodes_neigh[i] == nodes[i])
 
 class DOFManager:
 
@@ -315,225 +310,14 @@ class nedelec_cont(func_space):
     
 
 
-    
-
-
-class dof_manager:
-    def __init__(self, mesh):
-        self.mesh = mesh
-
-    def compute_total_dofs(self):
+# analytic solution is sin(x), so we should see that here.
+#print(f'solutions: {solutionstore}')
 
 
 
 
-def K_integrals(p, i, j, alpha, beta, jacob):
-    #'Integrals via gaussian quadrature for stiffness matrix', using 20 points purely to match Cam Key results
-    x, w = np.polynomial.legendre.leggauss(20)
-    integral = 0.0
-    for q in range(len(x)):
-        #f, df = basis_eval( n, x[q])
-        # mass-like term uses the jacobian, stiffness-like term divides by it
-        # (physical derivative = reference derivative / jacobian)
-        integral += w[q] * ( basis_eval(i, p, x[q])[1] * basis_eval(j, p, x[q])[1])
-    integral = -integral*alpha/jacob
-    return integral
- 
- 
-def M_integrals(p, i, j, beta, jacob):
-    #'perform integrals via gaussian quadrature for mass matrix'
-    x, w = np.polynomial.legendre.leggauss(20)
-    integral = 0.0
-    for q in range(len(x)):
-        #f, df = basis_eval(i, n, x[q])
-        #print(f)
-        integral += w[q] *  basis_eval(i, p, x[q])[0] * basis_eval(j, p, x[q])[0]
-    integral = integral*beta*jacob
-    return integral
- 
- 
-def K_fill_local(p_order, alpha, beta, jacob):
-    #'Fill each element stiffness matrix'
-    K_loc = np.zeros((p_order+1, p_order+1))
-    for i in range(1, p_order+2):
-        for j in range(1, p_order+2):
-            K_loc[i-1, j-1] = K_integrals(p_order, i, j, alpha, beta, jacob)
-    return K_loc
- 
- 
-def M_fill_local(p_order, beta, jacob):
-    #'Filling each block for each element of M_ij'
-    M_loc = np.zeros((p_order+1, p_order+1))
-    for i in range(1, p_order+2):
-        for j in range(1, p_order+2):
-            M_loc[i-1, j-1] = M_integrals(p_order, i, j, beta, jacob)
-    return M_loc
- 
- 
-def K_fill_global(M, meshy, alpha=1, beta=1):
-    #'Stiffness matrix builder '
-    nodes, elements, jac, p_orders, dof = meshy
 
-
-    ndof = dof_manager.num_dofs
-    K_globe = np.zeros((ndof, ndof))
-    #K_globe = np.zeros((len(nodes), len(nodes)))
-    for e in range(M):
-        elem = elements[e]
-        current_jacob = jac[e]
-        current_p_order = p_orders[e]
-        K_loc = K_fill_local(current_p_order, alpha, beta, current_jacob)
-        for i in range(current_p_order+1):
-            for j in range(current_p_order+1):
-                I = elem[i]
-                J = elem[j]
-                K_globe[I, J] += K_loc[i, j]
-    return K_globe
- 
- 
-def M_fill_global(M, meshy, beta=1):
-    #"Mass matrix builder"
-    nodes, elements, jac, p_orders,dof = meshy
-    M_globe = np.zeros((len(nodes), len(nodes)))
-    for e in range(M):
-        elem = elements[e]
-        current_jacob = jac[e]
-        current_p_order = p_orders[e]
-        M_loc = M_fill_local(current_p_order, beta, current_jacob)
-        for i in range(current_p_order+1):
-            for j in range(current_p_order+1):
-                I = elem[i]
-                J = elem[j]
-                M_globe[I, J] += M_loc[i, j]
-    return M_globe
- 
- 
-def weights_unknown(N):
-    return np.zeros(N)
- 
- 
-def G_assemble(g, meshy):
-    #"excitation vector ==0 unless other g specified"
-    nodes, elements, jac, p_orders, dof = meshy
-    G = np.zeros(dof)
-    if g != 0:
-        G[:] = g
-    return G
-
-
- 
-def boundary(G, K, L, btype):
-    #""'Neumann BC as specified in the problem statement. Dirichlet not yet defined, will need to do so'
-    #A bit confused on implementing and derivign different BC. Think I am rusty
-    G = G.copy()
-    K = K.copy()
-    if btype == 'dirichlet':
-        G[0] = 1
-        G[-1] = -np.cos(L)
-    elif btype == 'neumann':
-        G[0] = 1
-        G[-1] = -np.cos(L)
-    return G, K
- 
- 
-def waveguide(K, Mmat):
-    # This is not necessarily fully incorporated into the overally p-refining scheme
-    # eigenproblem K x = lambda Mmat x 
-    vals, vecs = scipy.linalg.eig(K, Mmat)
-    return vals, vecs
- 
- 
-def scattering(K, G,L):
-    soln = scipy.linalg.solve(K, G)
-    #error = error_scatter(soln,L)
-    return soln
- 
- 
-def HW(K, G,L):
-    #soln = scipy.linalg.solve(K, G)
-    #error = error_scatter(soln,L)
-    soln = np.linalg.inv(K).dot(G)
-    
-    return soln
-
-
-
-
- 
-def local_errors(approx, exact, L, M,n):
-    """Compute local errors for each element."""
-    nodes, elements, jac, p_orders = mesh(L, M, n)
-    local_errors = np.zeros(M)
-    for e in range(M):
-        elem = elements[e]
-        approx_local = approx[elem]
-        exact_local = exact[elem]
-        local_errors[e] = np.sqrt(np.sum((approx_local - exact_local) ** 2))
-    return local_errors
-
-
-def p_refine(mesh_info, local_errors, threshold):
-    sort_indices = np.argsort(local_errors,descending=True)
-    sorted_errors = np.sort(local_errors,descending=True)
-    top_to_refine = sort_indices[:len(sorted_errors)//3]
-    refine = local_errors[top_to_refine]
-    new_mesh_info = mesh_info
-    mesh_elem = mesh_info[1]
-    for i in range(len(refine)):
-        if refine[i] > threshold:
-            new_mesh_info[3][mesh_elem.index(top_to_refine[i])] += 1  
-        else:
-            break
-    return new_mesh_info
-
-
-def dual_weight_residual_global(solution, higher_order_soln):
-    '''Computing DWR for the whole domain, using the solution and enriched solution to error estimate.
-    In this case the operator L is self adjoint, so dual is same as primal, but the excitation is 
-    then the divergence of the primal solution, giving the "charge" density to the primals E field.'''
-
-    
-    soln = solution
-    enriched_soln = higher_order_soln
-    interpolated_soln = np.interp(np.linspace(0, 1, len(enriched_soln)), np.linspace(0, 1, len(soln)), soln)
-    error_estimate = np.gradient(enriched_soln) - np.gradient(interpolated_soln)
-    inner_product = np.dot(enriched_soln, interpolated_soln)
-    DWR = np.abs(inner_product) * error_estimate
-
-    return DWR
-
-
-
-def basis_scale_plotting(solution_in, L, M, mesh):
-    '''From Cam Key code (adapted) scales the solution to the physical output!'''
-    nodes, elems, jac, p_order, dof = mesh
-    s = np.linspace(-1, 1, 100)
-    plot_samps = np.zeros(M * 100)
-    s_len = len(s)
-    for e in range(M):
-        elem = elems[e]
-        for j_local in range(1, p_order[e] + 2):
-            coeff = solution_in[elem[j_local - 1]]
-            for k in range(s_len):
-                plot_samps[e * s_len + k] += coeff * basis_eval(j_local, p_order[e], s[k])[0]
-    return plot_samps
-
-
-
-
-def p_refine_DWR_global(type, L, M, p_orders, g=0):
-    # Use the DWR to refine the mesh with p refinement - no longer only globally
-    p_orders = np.asarray(p_orders, dtype=int)
-    low_order, low_order_plotting, mesher1 = main(p_orders, type, L, M, g)
-    high_order, high_order_plotting, mesher2 = main(p_orders + 1, type, L, M, g)
-    DWR = dual_weight_residual_global(low_order_plotting, high_order_plotting)
-    error_indicators = DWR * high_order_plotting
-    print(f'length of error: {len(error_indicators)}')
-    return DWR, error_indicators, low_order_plotting, mesher1
-
-
-
-
+main(2)
 # need to compute the low order initial basis funcitons across the global domain in the very first initial mesh. Then refinement is when we then superimpose the local p refinements 
 # on top. the only dof for the low order basis is on the boundaries between elements so the local are not suhc a problem.save these in the mesh?? 
 
@@ -542,42 +326,42 @@ def p_refine_DWR_global(type, L, M, p_orders, g=0):
 
 
 
-mesh1 = mesh(4,5, 2)
-mesh1.gen_init_mesh()
-marked_elem_p = [0,3]
-marked_elem_h = [1]
+# mesh1 = mesh(4,5, 2)
+# mesh1.gen_init_mesh()
+# marked_elem_p = [0,3]
+# marked_elem_h = [1]
 
-refine = refiner(mesh1, marked_elem_h, marked_elem_p)
+# refine = refiner(mesh1, marked_elem_h, marked_elem_p)
 
-refine.refine_h()
-refine.refine_p()
+# refine.refine_h()
+# refine.refine_p()
 
-activee = mesh1.active_elements
-activen = mesh1.active_nodes
-
-
+# activee = mesh1.active_elements
+# activen = mesh1.active_nodes
 
 
-for e in refine.mesh.active_elements:
-    print(
-        "Element:", e.id,
-        "nodes:", [n.id for n in e.nodes],
-        "coordinates:", [n.coordinate for n in e.nodes],
-        "p:", e.p_order,
-        "level:", e.level,
-        "active:", e.active,
-        "adjacency list", e.adjacency_list
-    )
 
 
-for e in activen:
-    print(
-        "Element", e.id,
-        "nodes:", [n.id for n in e.nodes],
-        "p:", e.p_order,
-        "level:", e.level,
-        "active:", e.active
-    )
+# for e in refine.mesh.active_elements:
+#     print(
+#         "Element:", e.id,
+#         "nodes:", [n.id for n in e.nodes],
+#         "coordinates:", [n.coordinate for n in e.nodes],
+#         "p:", e.p_order,
+#         "level:", e.level,
+#         "active:", e.active,
+#         "adjacency list", e.adjacency_list
+#     )
+
+
+# for e in activen:
+#     print(
+#         "Element", e.id,
+#         "nodes:", [n.id for n in e.nodes],
+#         "p:", e.p_order,
+#         "level:", e.level,
+#         "active:", e.active
+#     )
 
 
 
