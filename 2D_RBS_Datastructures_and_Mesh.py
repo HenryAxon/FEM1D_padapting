@@ -34,7 +34,7 @@ class topology:
 class node(topology):
     # In 1D a node is a face -> important for H(div)
     def __init__(self, id, coordinatex,coordinatey, level=0, parent=None):
-        super().__init__(id, level, parent)
+        super().__init__(id, active=True, level=level, parent=parent)
         self.coordinatex = coordinatex
         self.coordinatey = coordinatey
         self.adjacent_elem = []
@@ -43,13 +43,13 @@ class node(topology):
     
 class edge(topology):
     def __init__(self, id, nodes, level=0, parent=None):
-        super().__init__(id, level, parent)
+        super().__init__(id, active=True, level=level, parent=parent)
         self.nodes = nodes
         self.adjacency = []
 
 class face(topology):
     def __init__(self, id, nodes,edges, level, parent):
-        super().__init__(id, level, parent)
+        super().__init__(id, active=True, level=level, parent=parent)
         self.edges = edges
         self.nodes = nodes
         self.adjacent = []
@@ -266,7 +266,7 @@ class mesh:
     def plot_mesh(self, ax=None, annotate=True, show_nodes=False):
         if ax is None:
             fig, ax = plt.subplots()
-        for elem in self.elems:
+        for elem in self.active_elements:
             elem.plot(ax=ax, annotate=annotate, show_nodes=show_nodes)
         ax.set_aspect('equal')
         return ax
@@ -276,12 +276,7 @@ class mesh:
 # all we are really doing in 1D is technically just 1 edge refinement so to speak, and there is no directionality - which of course limits the use of this code, given that the 
 # actual goals are to produce effective anisotropic hp refinement. 
  
-if __name__ == "__main__":
-    mesh1 = mesh(L=10, N=6, p=2)
-    mesh1.gen_init_mesh()
-    ax1 = mesh1.plot_mesh(annotate=True, show_nodes=True)
-    plt.savefig("mesh_preview.png", dpi=150)
-    print("saved mesh_preview.png")
+
     
 
 
@@ -292,62 +287,115 @@ class refiner:
     def __init__(self, mesh, marked_elem_h_t,marked_elem_h_u,marked_elem_h_v, marked_elem_p):
         self.mesh = mesh
         self.marked_elem_h_t = marked_elem_h_t
-        self.marked_elem_h_u = marked_elem_h_u
-        self.marked_elem_h_v = marked_elem_h_v
+        # self.marked_elem_h_u = marked_elem_h_u
+        # self.marked_elem_h_v = marked_elem_h_v
         self.marked_elem_p = marked_elem_p
+
+    def child_nodes(self,parent):
+        left_bot = parent.nodes[0]
+        left_top = parent.nodes[1]
+        right_top = parent.nodes[3]
+        right_bot = parent.nodes[2]
+
+        newpos_l = (left_bot.coordinatex, left_bot.coordinatey + left_top.coordinatey /2)
+        newpos_r = (right_bot.coordinatex, left_bot.coordinatey + left_top.coordinatey /2)
+        newpos_t = (left_bot.coordinatex + left_top.coordinatex /2, left_top.coordinatey)
+        newpos_b = (left_bot.coordinatex + left_top.coordinatex /2, left_bot.coordinatey)
+
+        new_nodem = node(
+            self.mesh.next_node_id(),
+            (left_bot.coordinatex + right_top.coordinatex) / 2,
+            (left_bot.coordinatey + right_top.coordinatey) / 2,
+            level=self.mesh.level + 1,
+        )
+        self.mesh.node_set.append(new_nodem)
+        self.mesh.nodes_by_id[new_nodem.id] = new_nodem
+
+
+        return new_nodem
+
+    def split_edge(self, edge_in):
+        # Split the edge into two child edges
+        left_node = edge_in.nodes[0]
+        right_node = edge_in.nodes[1]
+
+        new_pos = ((left_node.coordinatex + right_node.coordinatex) / 2, (left_node.coordinatey + right_node.coordinatey) / 2)
+        new_node = node(self.mesh.next_node_id(), new_pos[0], new_pos[1], level=edge_in.level + 1)
+        self.mesh.node_set.append(new_node)
+        self.mesh.nodes_by_id[new_node.id] = new_node
+            
+
+        child_edge1 = edge(self.mesh.next_edge_id(), [left_node, new_node], level=edge_in.level + 1)
+        child_edge2 = edge(self.mesh.next_edge_id(), [new_node, right_node], level=edge_in.level + 1)
+        if edge_in in self.mesh.edges_u:
+            self.mesh.edges_u.append(child_edge1)
+            self.mesh.edges_u.append(child_edge2)
+            self.mesh.edges_by_id[child_edge1.id] = child_edge1
+            self.mesh.edges_by_id[child_edge2.id] = child_edge2
+        elif edge_in in self.mesh.edges_v:
+            self.mesh.edges_v.append(child_edge1)
+            self.mesh.edges_v.append(child_edge2)
+            self.mesh.edges_by_id[child_edge1.id] = child_edge1
+            self.mesh.edges_by_id[child_edge2.id] = child_edge2
+
+        return new_node, child_edge1, child_edge2
+
+
+
+
+
 
     def refine_h(self):
         #elements, nodes = self.mesh
         level_new = self.mesh.level +1
         for i in self.marked_elem_h_t:
             parent = self.mesh.elems[i]
-            left_bot = parent.nodes[0]
-            left_top = parent.nodes[1]
-            right_top = parent.nodes[3]
-            right_bot = parent.nodes[2]
 
-            #print("LEFT:", left.id, left.coordinate)
-            #print("RIGHT:", right.id, right.coordinate)
 
-            newpos_l = (left_bot.coordinatex, left_bot.coordinatey + left_top.coordinatey /2)
-            newpos_r = (right_bot.coordinatex, left_bot.coordinatey + left_top.coordinatey /2)
-            newpos_t = (left_bot.coordinatex + left_top.coordinatex /2, left_top.coordinatey)
-            newpos_b = (left_bot.coordinatex + left_top.coordinatex /2, left_bot.coordinatey)
 
-            #print("NEW:", newpos)
-            new_id1 = len(self.mesh.node_set)
-            new_id2 = new_id1+1
-            new_id3 = new_id1+2
-            new_id4 = new_id1+3
-            new_id = new_id1 +4
+            center_node = self.child_nodes(parent)
 
-            edge_id1 = len(self.edges_u)
-            edge_id2 = len(self.edges_v)
+            bottom_midpoint, bottom_left_edge, bottom_right_edge = self.split_edge(parent.edges[0])
+            top_midpoint, top_left_edge, top_right_edge = self.split_edge(parent.edges[1])
+            left_midpoint, left_bottom_edge, left_top_edge = self.split_edge(parent.edges[2])
+            right_midpoint, right_bottom_edge, right_top_edge = self.split_edge(parent.edges[3])
 
-            child1_id = len(self.mesh.elems)
-            child2_id = len(self.mesh.elems) + 1
-            child3_id = len(self.mesh.elems) + 2
-            child4_id = len(self.mesh.elems) + 3
 
-            new_nodel= node(new_id1, newpos_l, level = level_new)
-            new_noder = node(new_id2, newpos_r,level = level_new)
-            new_nodet = node(new_id3, newpos_t,level = level_new)
-            new_nodeb = node(new_id4, newpos_b, level = level_new)
-            new_nodem = node()
+        # manually create the new edges that are not children of any edge but are on the newly created midpoints from splitting edges
+            child_edge1 = edge(self.mesh.next_edge_id(), [left_midpoint, center_node], level=level_new)
+            child_edge2 = edge(self.mesh.next_edge_id(), [center_node, right_midpoint], level=level_new)
+            child_edge3 = edge(self.mesh.next_edge_id(), [bottom_midpoint, center_node], level=level_new)
+            child_edge4 = edge(self.mesh.next_edge_id(), [center_node, top_midpoint], level=level_new)
+            
+            self.mesh.edges_u.append(child_edge1)
+            self.mesh.edges_u.append(child_edge2)
+            self.mesh.edges_v.append(child_edge3)
+            self.mesh.edges_v.append(child_edge4)
+            self.mesh.edges_by_id[child_edge1.id] = child_edge1
+            self.mesh.edges_by_id[child_edge2.id] = child_edge2
+            self.mesh.edges_by_id[child_edge3.id] = child_edge3
+            self.mesh.edges_by_id[child_edge4.id] = child_edge4
 
-            edge1 = edge(edge_id1,nodes=[new_node,new_noder],level=level_new)
-            edge2 = edge(edge_id2, nodes=[new_nodeb,new_nodet],level=level_new)
+            # create the 4 new child elements 
 
-            self.mesh.node_set.append(new_node)
-            child1 = element(child1_id, [parent.nodes[0] , new_node], p_order = parent.p_order, parent=parent, level=level_new)
-            child2 = element(child2_id, [new_node, parent.nodes[1]],  p_order = parent.p_order,level=level_new,parent=parent)
-            child3 = element()
-            child4 = element()
+            child_elem1 = element(self.mesh.next_elem_id(), nodes=[parent.nodes[0], bottom_midpoint, left_midpoint, center_node], edges=[bottom_left_edge, child_edge1, left_bottom_edge, child_edge3], faces=[], p_order=parent.p_order, level=level_new, parent=parent)
+            child_elem2 = element(self.mesh.next_elem_id(), nodes=[bottom_midpoint, parent.nodes[1], center_node, right_midpoint], edges=[bottom_right_edge, child_edge2, child_edge3, right_bottom_edge], faces=[], p_order=parent.p_order, level=level_new, parent=parent)
+            child_elem3 = element(self.mesh.next_elem_id(), nodes=[left_midpoint, center_node, parent.nodes[2], top_midpoint], edges=[child_edge1, top_left_edge, left_top_edge, child_edge4], faces=[], p_order=parent.p_order, level=level_new, parent=parent)
+            child_elem4 = element(self.mesh.next_elem_id(), nodes=[center_node, right_midpoint, top_midpoint, parent.nodes[3]], edges=[child_edge2, top_right_edge, child_edge4, right_top_edge], faces=[], p_order=parent.p_order, level=level_new, parent=parent)
 
-            self.mesh.elems.append(child1)
-            self.mesh.elems.append(child2)
+            # save the new child elemetns to the mesh
+            self.mesh.elems.append(child_elem1)
+            self.mesh.elems.append(child_elem2)
+            self.mesh.elems.append(child_elem3)
+            self.mesh.elems.append(child_elem4)
 
-            parent.children.extend([self.mesh.elems[-2],self.mesh.elems[-1]])
+            # add to the dictionary of elements by id
+            self.mesh.elems_by_id[child_elem1.id] = child_elem1
+            self.mesh.elems_by_id[child_elem2.id] = child_elem2
+            self.mesh.elems_by_id[child_elem3.id] = child_elem3
+            self.mesh.elems_by_id[child_elem4.id] = child_elem4
+
+            parent.children.extend([self.mesh.elems[-4],self.mesh.elems[-3],self.mesh.elems[-2],self.mesh.elems[-1]])
             parent.active = False
             parent.p_order = 0
 
@@ -358,7 +406,16 @@ class refiner:
         return self.mesh
 
 
+mesh1 = mesh(L=10, N=6, p=2)
+mesh1.gen_init_mesh()
+refined_1 = refiner(mesh1, marked_elem_h_t=[0,1], marked_elem_h_u=[], marked_elem_h_v=[], marked_elem_p=[2])
+refined_1.refine_h()
+refined_1.refine_p()
 
+
+ax1 = refined_1.mesh.plot_mesh(annotate=True, show_nodes=True)
+plt.savefig("mesh_preview.png", dpi=150)
+print("saved mesh_preview.png")
 # in 1d these are essentially the same, but writing the skeleton can still be useful for the 2D implementation
 
 
