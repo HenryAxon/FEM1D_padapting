@@ -13,7 +13,7 @@
 
 
 import numpy as np
-import matplotlib as plt
+import matplotlib.pyplot as plt
 
 
 class topology:
@@ -73,40 +73,107 @@ class element(topology):
             p_order = 0 
         return p_order
 
+    def plot(self, ax, annotate=True, show_nodes=False):
+        # nodes are stored as [ (i,j), (i,j+1), (i+1,j), (i+1,j+1) ]
+        # reorder into a closed loop: bottom-left, bottom-right, top-right, top-left
+        bl, br, tl, tr = self.nodes[0], self.nodes[1], self.nodes[2], self.nodes[3]
+        loop = [bl, br, tr, tl, bl]
+        xs = [n.coordinatex for n in loop]
+        ys = [n.coordinatey for n in loop]
+ 
+        ax.plot(xs, ys, 'k-', linewidth=0.8)
+ 
+        if show_nodes:
+            node_xs = [n.coordinatex for n in self.nodes]
+            node_ys = [n.coordinatey for n in self.nodes]
+            ax.plot(node_xs, node_ys, 'o', color='tab:blue', markersize=3)
+ 
+        if annotate:
+            cx = sum(n.coordinatex for n in self.nodes) / len(self.nodes)
+            cy = sum(n.coordinatey for n in self.nodes) / len(self.nodes)
+            ax.annotate(str(self.id), (cx, cy), ha='center', va='center', fontsize=8)    
+
 
 
 
 
 class mesh:
-    def __init__(self,L, N, p, layer=0):
+    def __init__(self,L, N, p, level=0):
         self.L = L
         self.N = N
         self.p = p
-        self.layer = layer
-        self.node_set = np.zeros([self.N,self.N])
-        self.edges = np.zeros([self.N*(self.N-1),self.N*(self.N-1)])
-        self.elems = np.zeros([self.N-1,self.N-1])
+        self.level = level
+        self.node_set = []
+        self.edges_u = []
+        self.edges_v = []
+        self.elems = []
         #self.active_elems = []
         
+        self._next_node_id = 0
+        self._next_edge_id = 0
+        self._next_elem_id = 0    
 
+        self.nodes_by_id = {}
+        self.edges_by_id = {}
+        self.elems_by_id = {}        
+
+            
+    def next_node_id(self):
+        i = self._next_node_id
+        self._next_node_id += 1
+        return i
+
+    def next_edge_id(self):
+        i = self._next_edge_id
+        self._next_edge_id += 1
+        return i
+
+    def next_elem_id(self):
+        i = self._next_elem_id
+        self._next_elem_id += 1
+        return i
+
+    
     def gen_init_mesh(self):
         nodesx = np.linspace(0,self.L,self.N)
         nodesy = np.linspace(0, self.L, self.N)
         [nodesX, nodesY] = np.meshgrid(nodesx, nodesy)
+        node_index = lambda i, j: i * self.N + j
+        edge_u_index = lambda i, j: i * (self.N - 1) + j
+        edge_v_index = lambda i, j: i * self.N + j
+
+
+        node_at = {}
+        edge_u_at = {}
+        edge_v_at = {}
         #n_index = np.linspace(0,len(nodes))
         #lems = []
         #ode_set = []
         for i in range(self.N):
             for j in range(self.N):
-                self.node_set[i,j] = (node(i,j, nodesX[i],nodesY[j],level=self.layer))
-        for k in range(self.N*(self.N-1)):
-            for l in range(self.N*(self.N-1)):
-                self.edges[k,l] = (edge([k,l], [self.node_set[k,l], self.node_set[k,l]], p_order = self.p, level=self.layer, parent=None))
+                self.node_set.append(node(self.next_node_id(), nodesX[i,j],nodesY[i,j],level=self.level))
+                n = self.node_set[-1]
+                self.nodes_by_id[n.id] = n
+                node_at[i, j] = n
+        for i in range(self.N):
+            for j in range(self.N-1):
+                e=edge(self.next_edge_id(), [self.node_set[node_index(i,j)], self.node_set[node_index(i,j+1)]], level=self.level, parent=None)
+                self.edges_u.append(e)
+                self.edges_by_id[e.id] = e
+                edge_u_at[i, j] =e
+        for i in range(self.N-1):
+            for j in range(self.N):
+                e= edge(self.next_edge_id(), [self.node_set[node_index(i,j)], self.node_set[node_index(i+1,j)]], level=self.level, parent=None)
+                self.edges_v.append(e)
+                self.edges_by_id[e.id] = e
+                edge_v_at[i, j] = e
+
         for m in range(self.N-1):
             for n in range(self.N-1):
-                self.elems[m,n]= element([m,n], nodes=[self.node_set[m,m],self.node_set[m,m+1], self.node_set[m+1,m],self.node_set[m+1,m+1]], edges=[self.edges[m,m],self.edges[m+1,m],self.edges[m,m+1],self.edges[m+1,m+1]],faces = [], p_order=self.p,level=self.level,parent=self.parent)
-        
-        return self.node_set, self.elems
+                e=element(self.next_elem_id(), nodes=[self.node_set[node_index(m,n)],self.node_set[node_index(m,n+1)], self.node_set[node_index(m+1,n)],self.node_set[node_index(m+1,n+1)]], edges=[self.edges_u[edge_u_index(m,n)],self.edges_u[edge_u_index(m+1,n)],self.edges_v[edge_v_index(m,n)],self.edges_v[edge_v_index(m,n+1)]],faces = [], p_order=self.p,level=self.level,parent=None)
+                self.elems.append(e)
+                self.elems_by_id[e.id] = e
+        return self.node_set, self.edges_u, self.edges_v, self.elems
     @property
     def active_elements(self):
         return [e for e in self.elems if e.active]
@@ -116,28 +183,36 @@ class mesh:
         return [n for n in self.node_set if n.active]
 
     @property
-    def jacobian_finder(self):
-        jacobians = []
-        for i in range(len(self.active_elements)):
-            nodes = self.active_elements[i].nodes
-            coord_1 = nodes[0].coordinate
-            coord_2 = nodes[1].coordinate
-            jacobians.append((coord_2 - coord_1) / 2)
-        return jacobians
+    def active_edges_u(self):
+        return [e for e in self.edges_u if e.active]
 
     @property
-    def gaussian_integral_points(self):
-        '''
-        property to find the gaussian integral points on each element to then perform integration to form the 
-        K, M matrices for solving problems on the active elements
-        '''
-        gauss_info = []
-        
-        for i in range(len(self.active_elements)):
-            [x,w] = np.polynomial.legendre.leggauss(20)
-            gauss_info.append([x,w])
+    def active_edges_v(self):
+        return [e for e in self.edges_v if e.active]
 
-        return gauss_info
+    # @property
+    # def jacobian_finder(self):
+    #     jacobians = []
+    #     for i in range(len(self.active_elements)):
+    #         nodes = self.active_elements[i].nodes
+    #         coord_1 = nodes[0].coordinate
+    #         coord_2 = nodes[1].coordinate
+    #         jacobians.append((coord_2 - coord_1) / 2)
+    #     return jacobians
+
+    # @property
+    # def gaussian_integral_points(self):
+    #     '''
+    #     property to find the gaussian integral points on each element to then perform integration to form the 
+    #     K, M matrices for solving problems on the active elements
+    #     '''
+    #     gauss_info = []
+        
+    #     for i in range(len(self.active_elements)):
+    #         [x,w] = np.polynomial.legendre.leggauss(20)
+    #         gauss_info.append([x,w])
+
+    #     return gauss_info
 
 
 
@@ -158,12 +233,19 @@ class mesh:
                 for element_item in self.elems
                 if node_item in element_item.nodes
         ]
-        for edge in self.edges:
+        for edge in self.edges_u:
             edge.adjacent_elem = [
                 element_item.id
                 for element_item in self.elems
                 if edge in element_item.edges
             ]
+        for edge in self.edges_v:
+            edge.adjacent_elem = [
+                element_item.id
+                for element_item in self.elems
+                if edge in element_item.edges_v
+            ]
+            
 
     def deactivate(self):
         '''
@@ -184,51 +266,90 @@ class mesh:
     def plot_mesh(self, ax=None, annotate=True, show_nodes=False):
         if ax is None:
             fig, ax = plt.subplots()
-        for element in self.elems:
-            element.plot(ax=ax, annotate=annotate, show_nodes=show_nodes)
+        for elem in self.elems:
+            elem.plot(ax=ax, annotate=annotate, show_nodes=show_nodes)
+        ax.set_aspect('equal')
         return ax
 
             
 
 # all we are really doing in 1D is technically just 1 edge refinement so to speak, and there is no directionality - which of course limits the use of this code, given that the 
 # actual goals are to produce effective anisotropic hp refinement. 
-mesh1 = mesh(L=10, N= 20,p=2)
+ 
+if __name__ == "__main__":
+    mesh1 = mesh(L=10, N=6, p=2)
+    mesh1.gen_init_mesh()
+    ax1 = mesh1.plot_mesh(annotate=True, show_nodes=True)
+    plt.savefig("mesh_preview.png", dpi=150)
+    print("saved mesh_preview.png")
     
 
+
+
+
+
 class refiner:
-    def __init__(self, mesh, marked_elem_h, marked_elem_p):
+    def __init__(self, mesh, marked_elem_h_t,marked_elem_h_u,marked_elem_h_v, marked_elem_p):
         self.mesh = mesh
-        self.marked_elem_h = marked_elem_h
+        self.marked_elem_h_t = marked_elem_h_t
+        self.marked_elem_h_u = marked_elem_h_u
+        self.marked_elem_h_v = marked_elem_h_v
         self.marked_elem_p = marked_elem_p
 
     def refine_h(self):
         #elements, nodes = self.mesh
-        level_new = self.mesh.layer +1
-        for i in self.marked_elem_h:
+        level_new = self.mesh.level +1
+        for i in self.marked_elem_h_t:
             parent = self.mesh.elems[i]
-            left = parent.nodes[0]
-            right = parent.nodes[1]
+            left_bot = parent.nodes[0]
+            left_top = parent.nodes[1]
+            right_top = parent.nodes[3]
+            right_bot = parent.nodes[2]
 
-            print("LEFT:", left.id, left.coordinate)
-            print("RIGHT:", right.id, right.coordinate)
+            #print("LEFT:", left.id, left.coordinate)
+            #print("RIGHT:", right.id, right.coordinate)
 
-            newpos = (left.coordinate + right.coordinate) / 2
+            newpos_l = (left_bot.coordinatex, left_bot.coordinatey + left_top.coordinatey /2)
+            newpos_r = (right_bot.coordinatex, left_bot.coordinatey + left_top.coordinatey /2)
+            newpos_t = (left_bot.coordinatex + left_top.coordinatex /2, left_top.coordinatey)
+            newpos_b = (left_bot.coordinatex + left_top.coordinatex /2, left_bot.coordinatey)
 
-            print("NEW:", newpos)
-            new_id = len(self.mesh.node_set)
+            #print("NEW:", newpos)
+            new_id1 = len(self.mesh.node_set)
+            new_id2 = new_id1+1
+            new_id3 = new_id1+2
+            new_id4 = new_id1+3
+            new_id = new_id1 +4
+
+            edge_id1 = len(self.edges_u)
+            edge_id2 = len(self.edges_v)
+
             child1_id = len(self.mesh.elems)
             child2_id = len(self.mesh.elems) + 1
-            new_node= node(new_id, newpos, level = level_new)
+            child3_id = len(self.mesh.elems) + 2
+            child4_id = len(self.mesh.elems) + 3
+
+            new_nodel= node(new_id1, newpos_l, level = level_new)
+            new_noder = node(new_id2, newpos_r,level = level_new)
+            new_nodet = node(new_id3, newpos_t,level = level_new)
+            new_nodeb = node(new_id4, newpos_b, level = level_new)
+            new_nodem = node()
+
+            edge1 = edge(edge_id1,nodes=[new_node,new_noder],level=level_new)
+            edge2 = edge(edge_id2, nodes=[new_nodeb,new_nodet],level=level_new)
+
             self.mesh.node_set.append(new_node)
             child1 = element(child1_id, [parent.nodes[0] , new_node], p_order = parent.p_order, parent=parent, level=level_new)
             child2 = element(child2_id, [new_node, parent.nodes[1]],  p_order = parent.p_order,level=level_new,parent=parent)
+            child3 = element()
+            child4 = element()
+
             self.mesh.elems.append(child1)
             self.mesh.elems.append(child2)
+
             parent.children.extend([self.mesh.elems[-2],self.mesh.elems[-1]])
             parent.active = False
             parent.p_order = 0
-        self.mesh.adjacency_info()
-        return self.mesh
 
     def refine_p(self):
         
