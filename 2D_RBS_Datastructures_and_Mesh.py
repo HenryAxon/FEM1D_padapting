@@ -419,92 +419,29 @@ print("saved mesh_preview.png")
 # in 1d these are essentially the same, but writing the skeleton can still be useful for the 2D implementation
 
 
-class func_space:
-    def __init__(self, element):
-        self.element = element
-
-    def get_local_dofs(self, element):
-        dofs = []
-
-        # vertex DOFs
-        for node in element.nodes:
-            dofs.append(node)
-
-        # interior DOFs
-        for i in range(element.p_order - 1):
-            dofs.append((element, i))
-
-        return dofs
 
 
-    # def get_global_dof(self):
-    #     neighbors = self.element.adjacent_list
-    #     nodes = self.element.nodes
-    #     # look into the different dofs and find the overlapping ones. in 1D this is literally just finding what nodes are what global dof
-    #     globalList = []
-    #     for i in range(len(neighbors)):
-    #         nodes_neigh = neighbors[i].nodes
-    #         for j in range(len(nodes)):
-    #             globalList.append(nodes_neigh[i] if nodes_neigh[i] == nodes[i])
-
-class DOFManager:
-
-    def __init__(self):
-        self.global_dofs = {}
-        self.next_id = 0
-
-    def get_global_dof(self, local_dof):
-
-        if local_dof not in self.global_dofs:
-            self.global_dofs[local_dof] = self.next_id
-            self.next_id += 1
-
-        return self.global_dofs[local_dof]
-
-class H1_cont(func_space):
-    
-    def basis(self, element, s):
-
-        p = element.p_order
-
-        return [
-            basis_eval(j, p, s)[0]
-            for j in range(1, p + 2)
-        ]
-
-    def local_dofs(self, element):
-
-        # vertex DOFs
-        dofs = [
-            ("node", element.nodes[0].id),
-            ("node", element.nodes[1].id)
-        ]
-
-        # element-interior DOFs
-        for j in range(1, element.p_order):
-            dofs.append(("element", element.id, j))
-
-        return dofs
-
-class raviart_thomas_cont(func_space):
-    #associate tangential component on geometric component
-    def enforce_curl(self,element,s):
-        p = element.p_order
-        basis = []
+## now need to implement the degrees of freedom adn basis functions for Raviart Thomas spaces to be able to solve a H(div) type problem eventually. 
+# implement raviart thomas basis elements by rotation of the 2D Nedelec basis functions of a given order.
 
 
 
+class degrees_of_freedom_map:
+    def __init__(self,mesh):
+        self.mesh = mesh
+        self.dof_map = {}
 
-        return tans
+    def assign_dofs(self):
 
+class vector_basis_function:
+    def __init__(self, mesh, order):
+        self.mesh = mesh
+        self.order = order
+        self.basis_functions = {}
 
-class nedelec_cont(func_space):
-    # "associate" normal component on geometric component
-    def enforce_div(self, element, s):
-        p = element.p_order
-        basis = []
-        return divs 
-    
+    def generate_basis_functions(self):
+        for i in range(len(self.mesh.active_elements)):
+
 
 
 # analytic solution is sin(x), so we should see that here.
