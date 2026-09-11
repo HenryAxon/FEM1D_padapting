@@ -17,6 +17,9 @@ import matplotlib.pyplot as plt
 
 
 class topology:
+    '''
+    Most generally the storage of topology information, primarily meant to be inherited by each type of topology
+    '''
     #store base mesh, and mesh levels in general
     def __init__(self, id,active, level=0, parent=None):
         self.id = id
@@ -32,6 +35,9 @@ class topology:
 
 
 class node(topology):
+    '''
+    Nodes are the 1D interface where continuity is enforced it mostly just stores this info to be used as the endpoints for edges
+    '''
     # In 1D a node is a face -> important for H(div)
     def __init__(self, id, coordinatex,coordinatey, level=0, parent=None):
         super().__init__(id, active=True, level=level, parent=parent)
@@ -42,12 +48,18 @@ class node(topology):
 
     
 class edge(topology):
+    '''
+    The edges are the interfaces between elements in 2D.
+    '''
     def __init__(self, id, nodes, level=0, parent=None):
         super().__init__(id, active=True, level=level, parent=parent)
         self.nodes = nodes
         self.adjacency = []
 
 class face(topology):
+    '''
+    In 3D, we need faces as these are what continuity is enforced over.
+    '''
     def __init__(self, id, nodes,edges, level, parent):
         super().__init__(id, active=True, level=level, parent=parent)
         self.edges = edges
@@ -60,6 +72,11 @@ class face(topology):
 
 
 class element(topology):
+    '''
+    Defines the elements in a general sense, computing edges, nodes, faces (in 3D).
+    it inherits from topology and assembles an element and needs to handle full element deacivation.
+    
+    '''
     def __init__(self, id,nodes,edges,faces,p_order_u, p_order_v, level, parent):
         super().__init__(id=id, active=True, level=level, parent=parent)
         self.p_order_u = p_order_u
@@ -100,6 +117,7 @@ class element(topology):
 
 
 class mesh:
+    '''Uses elememts to stitch together a mesh'''
     def __init__(self,L, N, p_u, p_v, level=0):
         self.L = L
         self.N = N
@@ -287,6 +305,9 @@ class mesh:
 
 
 class refiner:
+    '''
+    So this takes the mesh and then can refine in h and p and ideally save the correct parents and children to each entity and element.
+    '''
     def __init__(self, mesh, marked_elem_h_t,marked_elem_h_u,marked_elem_h_v, marked_elem_p):
         self.mesh = mesh
         self.marked_elem_h_t = marked_elem_h_t
@@ -429,6 +450,9 @@ print("saved mesh_preview.png")
 ## now need to implement the degrees of freedom adn basis functions for Raviart Thomas spaces to be able to solve a H(div) type problem eventually. 
 # implement raviart thomas basis elements by rotation of the 2D Nedelec basis functions of a given order.
 class error_indication:
+    '''
+    Will eventually peform the adjoint refinement marking and all that.
+    '''
     def __init__(self, mesh, error_threshold):
         self.mesh = mesh
         self.error_threshold = error_threshold
@@ -441,6 +465,9 @@ class error_indication:
 
 
 class vector_basis_function:
+    '''
+    Computes basis (need to add derivatives) 
+    '''
     def __init__(self, mesh, order_u, order_v):
         self.mesh = mesh
         self.order_u = order_u
@@ -534,12 +561,36 @@ class stiffness_matrix:
 
 
 
+class excitation_vector:
+    def __init__(self, mesh)
+        self.mesh = mesh
+
+    def assemble_excitation_vector(self):
+
+
+class boundary_conditions:
+    def __init__(self, mesh, boundary_type, boundary_value):
+        self.mesh = mesh
+        self.boundary_type = boundary_type
+        self.boundary_value = boundary_value
+
+
 
         
-
-
-
 class FEM_solver:
+    def __init__(self, stiffness, excitation, boundary, solution_type):
+        self.stiffness = stiffness
+        self.excitation = excitation
+        self.boundary = boundary
+        self.solution_type = solution_type
+
+    def eigen_solution(self):
+
+
+
+    def scattering_solution(self):
+
+
 
 
 
