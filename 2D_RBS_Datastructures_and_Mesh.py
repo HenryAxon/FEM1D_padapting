@@ -60,9 +60,10 @@ class face(topology):
 
 
 class element(topology):
-    def __init__(self, id,nodes,edges,faces,p_order, level, parent):
+    def __init__(self, id,nodes,edges,faces,p_order_u, p_order_v, level, parent):
         super().__init__(id=id, active=True, level=level, parent=parent)
-        self.p_order = p_order
+        self.p_order_u = p_order_u
+        self.p_order_v = p_order_v
         self.nodes = nodes
         self.edges = edges
         self.faces = faces
@@ -70,8 +71,9 @@ class element(topology):
 
     def deactivate(self):
         if self.active == False:
-            p_order = 0 
-        return p_order
+            p_order_u = 0
+            p_order_v = 0
+        return p_order_u, p_order_v
 
     def plot(self, ax, annotate=True, show_nodes=False):
         # nodes are stored as [ (i,j), (i,j+1), (i+1,j), (i+1,j+1) ]
@@ -423,8 +425,14 @@ print("saved mesh_preview.png")
 
 ## now need to implement the degrees of freedom adn basis functions for Raviart Thomas spaces to be able to solve a H(div) type problem eventually. 
 # implement raviart thomas basis elements by rotation of the 2D Nedelec basis functions of a given order.
-
-
+class error_indication:
+    def __init__(self, mesh, error_threshold):
+        self.mesh = mesh
+        self.error_threshold = error_threshold
+        self.marked_p = []
+        self.marked_h_u = []
+        self.marked_h_v = []
+        self.marked_h_t = []
 
 class degrees_of_freedom_map:
     def __init__(self,mesh):
@@ -439,9 +447,51 @@ class vector_basis_function:
         self.order = order
         self.basis_functions = {}
 
+    def basis_functions(self,u, v, order_u, order_v):
+        # this actually should be basis function agnostic. From notaros review paper H(div) basis constrution on quadrilatiral [-1,1] for both dimensions
+        # this only created the 1D component in either u or v direction, evaluate the same basis functions for the v direction then you must take the product of 
+        # each direction with a constant parameter in the otehr direction to get f_ij for u and v and then multiply them in the summation with the unkowns to get the 
+        # final full basis in terms of the solution.  
+        # 
+        if order_v == 0: 
+            v_basis = (1 - v) * u**order_u
+        elif order_v == 1:
+            v_basis = (v + 1) * u **order_u
+        elif order_v >= 2 and order_v % 2 == 0:
+            v_basis = (v**order_v - 1) * u **order_u
+        else:
+            v_basis = (v**order_v - v) * u **order_u
+
+        # now the cases where we have the u direction basis functions
+
+        if order_u == 0:
+            u_basis = (1 - u) * v**order_v
+        elif order_u == 1:
+            u_basis = (u + 1) * v **order_v
+        elif order_u >= 2 and order_u % 2 == 0:
+            u_basis = (u**order_u - 1) * v **order_v 
+        else:
+            u_basis = (u**order_u - u) * v **order_v
+
+        return u_basis, v_basis
+
+
+    def local_dof(self, element):
+        for i in range(len(self.mesh.elements)):
+            element_v_order = element.p_u_order
+                
+
     def generate_basis_functions(self):
         for i in range(len(self.mesh.active_elements)):
 
+
+class Matrix_assembler:
+
+
+
+
+
+class FEM_solver:
 
 
 # analytic solution is sin(x), so we should see that here.
