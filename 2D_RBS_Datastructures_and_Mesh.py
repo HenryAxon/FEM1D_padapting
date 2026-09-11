@@ -445,9 +445,10 @@ class degrees_of_freedom_map:
     def assign_dofs(self):
 
 class vector_basis_function:
-    def __init__(self, mesh, order):
+    def __init__(self, mesh, order_u, order_v):
         self.mesh = mesh
-        self.order = order
+        self.order_u = order_u
+        self.order_v = order_v
         self.basis_functions = {}
 
     def basis_functions(self,u, v, order_u, order_v):
@@ -479,13 +480,40 @@ class vector_basis_function:
         return u_basis, v_basis
 
 
-    def local_dof(self, element):
-        for i in range(len(self.mesh.elements)):
-            element_v_order = element.p_u_order
-                
+    def interior_dofs(self, element):
+        for i in range(element.p_order_u + 1):
+            for j in range(element.p_order_v + 1):
+                dof_id = f"{element.id}_{i}_{j}"
+                self.dof_map[dof_id] = (element, i, j)
 
-    def generate_basis_functions(self):
-        for i in range(len(self.mesh.active_elements)):
+    def edge_dofs(self, element):
+            # assign p orders per edge according to if the edge is horizontal or vertical,then use this to assign teh dofs accordingly
+        for edge in element.edges[0:1]:
+            # this is the u oriented edges
+            dof_id = f"{element.id}_edge_{edge.id}"
+            dof_count = element.p_order_u + 1
+        for edge in element.edges[2:3]:
+            # this is the v oriented edges
+            dof_id = f"{element.id}_edge_{edge.id}"
+            dof_count = element.p_order_v + 1
+  
+
+class global_dof_handling:
+    def __init__(self,mesh):
+        self.mesh = mesh
+        self.global_dof_map = {}
+
+    def assign_global_dofs(self):
+        # traverse each elemetn and determine the shared local dofs on each edge between adjacent elements and assing global dof to that edge interface.
+        for element in self.mesh.active_elements:
+            for edge in element.edges:
+                main_edge_dofs = edge.edge_dofs()
+                # find the shared edge
+                edge.adjacent_elem = [e for e in self.mesh.active_elements if edge in e.edges and e != element]
+                if edge in edge.adjacent_elem.edges:
+                    self.global_dof_map[edge.id] = min(main_edge_dofs, edge.adjacent_elem.edge_dofs())
+
+
 
 
 class Matrix_assembler:
