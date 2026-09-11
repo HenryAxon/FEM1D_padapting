@@ -100,10 +100,11 @@ class element(topology):
 
 
 class mesh:
-    def __init__(self,L, N, p, level=0):
+    def __init__(self,L, N, p_u, p_v, level=0):
         self.L = L
         self.N = N
-        self.p = p
+        self.p_u = p_u
+        self.p_v = p_v
         self.level = level
         self.node_set = []
         self.edges_u = []
@@ -172,7 +173,7 @@ class mesh:
 
         for m in range(self.N-1):
             for n in range(self.N-1):
-                e=element(self.next_elem_id(), nodes=[self.node_set[node_index(m,n)],self.node_set[node_index(m,n+1)], self.node_set[node_index(m+1,n)],self.node_set[node_index(m+1,n+1)]], edges=[self.edges_u[edge_u_index(m,n)],self.edges_u[edge_u_index(m+1,n)],self.edges_v[edge_v_index(m,n)],self.edges_v[edge_v_index(m,n+1)]],faces = [], p_order=self.p,level=self.level,parent=None)
+                e=element(self.next_elem_id(), nodes=[self.node_set[node_index(m,n)],self.node_set[node_index(m,n+1)], self.node_set[node_index(m+1,n)],self.node_set[node_index(m+1,n+1)]], edges=[self.edges_u[edge_u_index(m,n)],self.edges_u[edge_u_index(m+1,n)],self.edges_v[edge_v_index(m,n)],self.edges_v[edge_v_index(m,n+1)]],faces = [], p_order_u=self.p_u, p_order_v=self.p_v, level=self.level,parent=None)
                 self.elems.append(e)
                 self.elems_by_id[e.id] = e
         return self.node_set, self.edges_u, self.edges_v, self.elems
@@ -258,12 +259,12 @@ class mesh:
             adjacent = node_item.adjacent_elem
             if adjacent.level < node_item.level and node_item in adjacent.node_set:
                 node_item.active = False
-                node_item.p_order = 0
+ #               node_item.p_order = 0
         for edge in self.edges:
             adjacent = edge.adjacent_elem
             if adjacent.level < edge.level and edge in adjacent.edges:
                 edge.active = False
-                edge.p_order = 0
+#                edge.p_order = 0
     
     def plot_mesh(self, ax=None, annotate=True, show_nodes=False):
         if ax is None:
@@ -399,16 +400,18 @@ class refiner:
 
             parent.children.extend([self.mesh.elems[-4],self.mesh.elems[-3],self.mesh.elems[-2],self.mesh.elems[-1]])
             parent.active = False
-            parent.p_order = 0
+            parent.p_order_u = 0
+            parent.p_order_v = 0
 
     def refine_p(self):
         
         for i in self.marked_elem_p:
-            self.mesh.elems[i].p_order +=1
+            self.mesh.elems[i].p_order_u +=1
+            self.mesh.elems[i].p_order_v +=1
         return self.mesh
 
 
-mesh1 = mesh(L=10, N=6, p=2)
+mesh1 = mesh(L=10, N=6, p_u=2, p_v=2)
 mesh1.gen_init_mesh()
 refined_1 = refiner(mesh1, marked_elem_h_t=[0,1], marked_elem_h_u=[], marked_elem_h_v=[], marked_elem_p=[2])
 refined_1.refine_h()
