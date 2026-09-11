@@ -437,12 +437,8 @@ class error_indication:
         self.marked_h_v = []
         self.marked_h_t = []
 
-class degrees_of_freedom_map:
-    def __init__(self,mesh):
-        self.mesh = mesh
-        self.dof_map = {}
 
-    def assign_dofs(self):
+
 
 class vector_basis_function:
     def __init__(self, mesh, order_u, order_v):
@@ -516,17 +512,36 @@ class global_dof_handling:
 
 
 
-class Matrix_assembler:
+# class integration:
+#     def __init__(self, mesh, order_u, order_v):
+#         self.mesh = mesh
+#         self.order_u = order_u
+#         self.order_v = order_v
 
 
+#     def gaussian_quadrature(self):
+
+class stiffness_matrix:
+    def __init__(self, mesh, degrees_of_freedom):
+        self.mesh = mesh
+        self.degrees_of_freedom = degrees_of_freedom
+
+
+    def assemble_stiffness_matrix(self):
+
+
+    def local_stiffness_matrix(self, element):
+
+
+
+
+        
 
 
 
 class FEM_solver:
 
 
-# analytic solution is sin(x), so we should see that here.
-#print(f'solutions: {solutionstore}')
 
 
 
