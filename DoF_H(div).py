@@ -14,10 +14,7 @@ class vector_basis_function:
         self.basis_functions = {}
 
     def basis_functions(self,u, v):
-        # this actually should be basis function agnostic. From notaros review paper H(div) basis constrution on quadrilatiral [-1,1] for both dimensions
-        # this only created the 1D component in either u or v direction, evaluate the same basis functions for the v direction then you must take the product of 
-        # each direction with a constant parameter in the otehr direction to get f_ij for u and v and then multiply them in the summation with the unkowns to get the 
-        # final full basis in terms of the solution.  
+        #Notaros/Ilic higher order basis functions
         # 
         if self.order_v == 0: 
             v_basis = (1 - v) * u**self.order_u
@@ -42,6 +39,7 @@ class vector_basis_function:
         return u_basis, v_basis
 
     def derivatives(self,u,v):
+         # this is really the divergence I suppose if you add the resulting components
          if order_v == 0: 
             v_basis = (- v) * u ** order_u
         elif order_v == 1:
@@ -64,6 +62,8 @@ class vector_basis_function:
 
         return du_basis, dv_basis   
 
+         
+
     def contravariant_piola(self):
          # Piola transform for a 2D quad element, contravariant maps physical to reference while preserving flux
          # for affine quads I think I can just worry about mapping the nodes on each edge. and taking jacobians for integration.
@@ -80,9 +80,6 @@ class vector_basis_function:
             map_x = right_x - left_x
 
         
-
-
-
 
 
     def standard_piola(self, u, v, mesh):
@@ -107,6 +104,10 @@ class global_dof_handling:
                 edge.adjacent_elem = [e for e in self.mesh.active_elements if edge in e.edges and e != element]
                 if edge in edge.adjacent_elem.edges:
                     self.global_dof_map[edge.id] = min(main_edge_dofs, edge.adjacent_elem.edge_dofs())
+
+class local:
+    def __init__(self,mesh):
+        self.mesh = mesh
 
 
     def local_dofs(self, element):
@@ -144,11 +145,18 @@ class deactivate_dof:
                         j = 0 
 
     def edge_dof(self):
-         for i in self.mesh.elements:
-              if i.is_leaf == True:
-                   for j in self.dofs[i.id]:
-                        if j[0] == "edge" and i.adjacent_elems.level == i.level:
-                             j = 0
+         # checks for each leaf that i
+        for i in self.mesh.elements:
+            for k in i.adjacent_elems
+                if k.level == i.level:
+                    pass
+                elif k.level < i.level
+                    for j in self.dofs[i.id]:
+                        if j[0] == "edge"
+                            j = 0
+                else:
+                     pass
+
 
                       
                 
