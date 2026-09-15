@@ -464,89 +464,38 @@ class error_indication:
 
 
 
-class vector_basis_function:
-    '''
-    Computes basis (need to add derivatives) 
-    '''
+class deactivate:
+    # iterate through each refinement layer, and each edge node and face. if suitable neighbor exists, maatch shape function with adjacent cells,
+    # activate only the fully matched DOF.
+
+    # if h-refinement is performed activate cell dofs on chil deactivate on parent, then if geometrical component is active deactivate corresponding component on
+    #parent layer
+    def __init__(self, mesh):
+        self.mesh = mesh
+
+    def deactivate_nodes(self):
+        
+    def deactivate_edges(self):
+
+    def deactivate_elem(self):
+
+
+
+class integration:
     def __init__(self, mesh, order_u, order_v):
         self.mesh = mesh
         self.order_u = order_u
         self.order_v = order_v
-        self.basis_functions = {}
-
-    def basis_functions(self,u, v, order_u, order_v):
-        # this actually should be basis function agnostic. From notaros review paper H(div) basis constrution on quadrilatiral [-1,1] for both dimensions
-        # this only created the 1D component in either u or v direction, evaluate the same basis functions for the v direction then you must take the product of 
-        # each direction with a constant parameter in the otehr direction to get f_ij for u and v and then multiply them in the summation with the unkowns to get the 
-        # final full basis in terms of the solution.  
-        # 
-        if order_v == 0: 
-            v_basis = (1 - v) * u**order_u
-        elif order_v == 1:
-            v_basis = (v + 1) * u **order_u
-        elif order_v >= 2 and order_v % 2 == 0:
-            v_basis = (v**order_v - 1) * u **order_u
-        else:
-            v_basis = (v**order_v - v) * u **order_u
-
-        # now the cases where we have the u direction basis functions
-
-        if order_u == 0:
-            u_basis = (1 - u) * v**order_v
-        elif order_u == 1:
-            u_basis = (u + 1) * v **order_v
-        elif order_u >= 2 and order_u % 2 == 0:
-            u_basis = (u**order_u - 1) * v **order_v 
-        else:
-            u_basis = (u**order_u - u) * v **order_v
-
-        return u_basis, v_basis
 
 
-    def interior_dofs(self, element):
-        for i in range(element.p_order_u + 1):
-            for j in range(element.p_order_v + 1):
-                dof_id = f"{element.id}_{i}_{j}"
-                self.dof_map[dof_id] = (element, i, j)
+    def gaussian_quadrature(self):
+        #define the integration points to then integrate 
+        for i in self.mesh.active_elem:
+            x_int_points = numpy.polynomial.legendre.leggauss(i.order_u + 1)
+            y_int_points = numpy.polynomial.legendre.leggauss(i.order_v + 1)
 
-    def edge_dofs(self, element):
-            # assign p orders per edge according to if the edge is horizontal or vertical,then use this to assign teh dofs accordingly
-        for edge in element.edges[0:1]:
-            # this is the u oriented edges
-            dof_id = f"{element.id}_edge_{edge.id}"
-            dof_count = element.p_order_u + 1
-        for edge in element.edges[2:3]:
-            # this is the v oriented edges
-            dof_id = f"{element.id}_edge_{edge.id}"
-            dof_count = element.p_order_v + 1
-  
-
-class global_dof_handling:
-    def __init__(self,mesh):
-        self.mesh = mesh
-        self.global_dof_map = {}
-
-    def assign_global_dofs(self):
-        # traverse each elemetn and determine the shared local dofs on each edge between adjacent elements and assing global dof to that edge interface.
-        for element in self.mesh.active_elements:
-            for edge in element.edges:
-                main_edge_dofs = edge.edge_dofs()
-                # find the shared edge
-                edge.adjacent_elem = [e for e in self.mesh.active_elements if edge in e.edges and e != element]
-                if edge in edge.adjacent_elem.edges:
-                    self.global_dof_map[edge.id] = min(main_edge_dofs, edge.adjacent_elem.edge_dofs())
-
-
-
-
-# class integration:
-#     def __init__(self, mesh, order_u, order_v):
-#         self.mesh = mesh
-#         self.order_u = order_u
-#         self.order_v = order_v
-
-
-#     def gaussian_quadrature(self):
+            x_int = sum(w * f)
+            y_int = sum(w * f)
 
 class stiffness_matrix:
     def __init__(self, mesh, degrees_of_freedom):
@@ -555,9 +504,12 @@ class stiffness_matrix:
 
 
     def assemble_stiffness_matrix(self):
+        # need to add the calls to local stiffness matrix for each elemetn and add them correctly
+        # also need the mapping between reference and global elements to be nailed down precisely. This is a piola mapping.
 
 
     def local_stiffness_matrix(self, element):
+        # here we mostly call the integrations in the space of the reference element
 
 
 
